@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>FocusdBot Icon – Transparent BG</title>
+<style>
+    /* Page is fully transparent so exports keep alpha */
+    html,body{
+        margin:0;
+        height:100%;
+        background:transparent;
+        display:flex;
+        align-items:center;
+        justify-content:center;
+    }
+    /* 1024-px artboard for the icon */
+    .icon{
+        position:relative;
+        width:1024px;
+        height:1024px;
+        border-radius:23%;
+        background:linear-gradient(145deg,#55a9ff,#4f77ff);
+        /* Remove outer shadow so PNG has clean edges */
+        overflow:hidden;
+    }
+    /* micro-texture lines (optional) */
+    .icon::before{
+        content:'';
+        position:absolute;inset:0;
+        background:repeating-linear-gradient(0deg,rgba(255,255,255,.05) 0 1px,transparent 1px 10%);
+        mix-blend-mode:overlay;
+    }
+
+    /* robot head */
+    .robot{
+        position:absolute;
+        width:70%;height:70%;
+        top:15%;left:15%;
+        background:#fff;
+        border-radius:15%;
+    }
+
+    /* antenna */
+    .antenna{
+        position:absolute;
+        width:9%;height:20%;
+        background:#fff;
+        left:50%;transform:translateX(-50%);
+        top:-18%;
+        border-radius:100px 100px 0 0 / 100px 100px 0 0;
+    }
+    .antenna::after{
+        content:'';
+        position:absolute;left:50%;top:-40%;
+        transform:translateX(-50%);
+        width:18%;padding-bottom:18%;
+        background:#fff;
+        border-radius:50%;
+    }
+
+    /* eyes */
+    .eye{
+        position:absolute;
+        width:18%;padding-bottom:18%;
+        background:#4f77ff;
+        border-radius:50%;
+        top:35%;
+    }
+    .eye.left{left:22%;}
+    .eye.right{right:22%;}
+
+    /* mouth */
+    .mouth{
+        position:absolute;
+        width:46%;height:10%;
+        background:#4f77ff;
+        bottom:25%;left:27%;
+        border-radius:50px;
+    }
+</style>
+</head>
+<body>
+    <div class="icon">
+        <div class="robot">
+            <div class="antenna"></div>
+            <div class="eye left"></div>
+            <div class="eye right"></div>
+            <div class="mouth"></div>
+        </div>
+    </div>
+</body>
+</html>

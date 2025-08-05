@@ -1,0 +1,686 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FocusdBot - Your AI Focus Companion for macOS</title>
+    <meta name="description" content="Meet FocusdBot - the adorable robot that keeps you focused with smart distraction detection, beautiful analytics, and Pomodoro timers. Download for macOS.">
+    
+    <!-- Open Graph / Social Media -->
+    <meta property="og:type" content="website">
+    <meta property="og:title" content="FocusdBot - Your AI Focus Companion">
+    <meta property="og:description" content="Boost your productivity with an adorable robot companion that tracks focus, blocks distractions, and provides beautiful analytics.">
+    <meta property="og:url" content="https://focusdbot.com">
+    
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        :root {
+            --primary: #007AFF;
+            --secondary: #5856D6;
+            --success: #34C759;
+            --warning: #FF9500;
+            --danger: #FF3B30;
+            --dark: #1C1C1E;
+            --light-gray: #F2F2F7;
+            --medium-gray: #8E8E93;
+            --text: #1C1C1E;
+            --bg: #FFFFFF;
+            --robot-blue: #4A90E2;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', system-ui, sans-serif;
+            line-height: 1.6;
+            color: var(--text);
+            background: var(--bg);
+            overflow-x: hidden;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 20px;
+        }
+        
+        /* Header */
+        header {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(20px);
+            border-bottom: 1px solid rgba(0, 0, 0, 0.1);
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            z-index: 1000;
+        }
+        
+        nav {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 1rem 0;
+        }
+        
+        .logo {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: var(--robot-blue);
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        
+        .robot-icon {
+            width: 32px;
+            height: 32px;
+            background: linear-gradient(135deg, var(--robot-blue), var(--secondary));
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 18px;
+        }
+        
+        .nav-links {
+            display: flex;
+            gap: 2rem;
+            list-style: none;
+        }
+        
+        .nav-links a {
+            text-decoration: none;
+            color: var(--text);
+            font-weight: 500;
+            transition: color 0.3s ease;
+        }
+        
+        .nav-links a:hover {
+            color: var(--primary);
+        }
+        
+        .download-btn {
+            background: var(--primary);
+            color: white;
+            padding: 0.75rem 1.5rem;
+            border-radius: 12px;
+            text-decoration: none;
+            font-weight: 600;
+            transition: all 0.3s ease;
+            border: none;
+            cursor: pointer;
+        }
+        
+        .download-btn:hover {
+            background: #0056CC;
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(0, 122, 255, 0.3);
+        }
+        
+        /* Hero Section */
+        .hero {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 120px 0 80px;
+            text-align: center;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .hero::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><defs><pattern id="grid" width="10" height="10" patternUnits="userSpaceOnUse"><path d="M 10 0 L 0 0 0 10" fill="none" stroke="rgba(255,255,255,0.1)" stroke-width="0.5"/></pattern></defs><rect width="100" height="100" fill="url(%23grid)"/></svg>');
+            opacity: 0.3;
+        }
+        
+        .hero-content {
+            position: relative;
+            z-index: 2;
+        }
+        
+        .hero h1 {
+            font-size: 3.5rem;
+            font-weight: 800;
+            margin-bottom: 1.5rem;
+            background: linear-gradient(45deg, #fff, #e8f4fd);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+        
+        .hero .subtitle {
+            font-size: 1.3rem;
+            margin-bottom: 2rem;
+            opacity: 0.9;
+            max-width: 600px;
+            margin-left: auto;
+            margin-right: auto;
+        }
+        
+        .hero-buttons {
+            display: flex;
+            gap: 1rem;
+            justify-content: center;
+            flex-wrap: wrap;
+            margin-bottom: 3rem;
+        }
+        
+        .btn-primary {
+            background: white;
+            color: var(--primary);
+            padding: 1rem 2rem;
+            border-radius: 12px;
+            text-decoration: none;
+            font-weight: 700;
+            font-size: 1.1rem;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+        }
+        
+        .btn-primary:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.3);
+        }
+        
+        .btn-secondary {
+            background: rgba(255, 255, 255, 0.2);
+            color: white;
+            padding: 1rem 2rem;
+            border-radius: 12px;
+            text-decoration: none;
+            font-weight: 600;
+            font-size: 1.1rem;
+            transition: all 0.3s ease;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+        }
+        
+        .btn-secondary:hover {
+            background: rgba(255, 255, 255, 0.3);
+            transform: translateY(-2px);
+        }
+        
+        .hero-robot {
+            width: 120px;
+            height: 120px;
+            background: linear-gradient(135deg, var(--robot-blue), var(--secondary));
+            border-radius: 50%;
+            margin: 0 auto 2rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 60px;
+            animation: float 3s ease-in-out infinite;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+        }
+        
+        @keyframes float {
+            0%, 100% { transform: translateY(0px); }
+            50% { transform: translateY(-10px); }
+        }
+        
+        /* Features Section */
+        .features {
+            padding: 80px 0;
+            background: var(--light-gray);
+        }
+        
+        .section-title {
+            text-align: center;
+            font-size: 2.5rem;
+            font-weight: 700;
+            margin-bottom: 1rem;
+            color: var(--text);
+        }
+        
+        .section-subtitle {
+            text-align: center;
+            font-size: 1.2rem;
+            color: var(--medium-gray);
+            margin-bottom: 4rem;
+            max-width: 600px;
+            margin-left: auto;
+            margin-right: auto;
+        }
+        
+        .features-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+            gap: 2rem;
+            margin-top: 3rem;
+        }
+        
+        .feature-card {
+            background: white;
+            padding: 2rem;
+            border-radius: 20px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+            transition: all 0.3s ease;
+            border: 1px solid rgba(0, 0, 0, 0.05);
+        }
+        
+        .feature-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15);
+        }
+        
+        .feature-icon {
+            width: 60px;
+            height: 60px;
+            border-radius: 16px;
+            margin-bottom: 1.5rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+            color: white;
+        }
+        
+        .feature-card h3 {
+            font-size: 1.4rem;
+            font-weight: 700;
+            margin-bottom: 1rem;
+            color: var(--text);
+        }
+        
+        .feature-card p {
+            color: var(--medium-gray);
+            line-height: 1.6;
+        }
+        
+        /* Stats Section */
+        .stats {
+            padding: 80px 0;
+            background: var(--text);
+            color: white;
+            text-align: center;
+        }
+        
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 3rem;
+            margin-top: 3rem;
+        }
+        
+        .stat-item h3 {
+            font-size: 3rem;
+            font-weight: 800;
+            margin-bottom: 0.5rem;
+            background: linear-gradient(45deg, var(--primary), var(--secondary));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+        
+        .stat-item p {
+            opacity: 0.8;
+            font-size: 1.1rem;
+        }
+        
+        /* Download Section */
+        .download-section {
+            padding: 80px 0;
+            background: linear-gradient(135deg, var(--primary), var(--secondary));
+            color: white;
+            text-align: center;
+        }
+        
+        .download-section h2 {
+            font-size: 2.5rem;
+            font-weight: 700;
+            margin-bottom: 1rem;
+        }
+        
+        .download-section p {
+            font-size: 1.2rem;
+            margin-bottom: 2rem;
+            opacity: 0.9;
+        }
+        
+        .download-card {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(20px);
+            border-radius: 20px;
+            padding: 2rem;
+            max-width: 500px;
+            margin: 2rem auto;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+        
+        .system-req {
+            margin-top: 1rem;
+            font-size: 0.9rem;
+            opacity: 0.7;
+        }
+        
+        /* Footer */
+        footer {
+            background: var(--dark);
+            color: white;
+            padding: 3rem 0 2rem;
+            text-align: center;
+        }
+        
+        .footer-content {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 2rem;
+            margin-bottom: 2rem;
+        }
+        
+        .footer-section h4 {
+            margin-bottom: 1rem;
+            color: var(--primary);
+        }
+        
+        .footer-section ul {
+            list-style: none;
+        }
+        
+        .footer-section a {
+            color: rgba(255, 255, 255, 0.7);
+            text-decoration: none;
+            transition: color 0.3s ease;
+        }
+        
+        .footer-section a:hover {
+            color: white;
+        }
+        
+        .footer-bottom {
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+            padding-top: 2rem;
+            opacity: 0.7;
+        }
+        
+        /* Responsive */
+        @media (max-width: 768px) {
+            .hero h1 {
+                font-size: 2.5rem;
+            }
+            
+            .hero .subtitle {
+                font-size: 1.1rem;
+            }
+            
+            .hero-buttons {
+                flex-direction: column;
+                align-items: center;
+            }
+            
+            .features-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .nav-links {
+                display: none;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Header -->
+    <header>
+        <nav class="container">
+            <div class="logo">
+                <div class="robot-icon">🤖</div>
+                FocusdBot
+            </div>
+            <ul class="nav-links">
+                <li><a href="#features">Features</a></li>
+                <li><a href="#download">Download</a></li>
+                <li><a href="#support">Support</a></li>
+            </ul>
+            <a href="dist/FocusdBot-1.0.0.zip" class="download-btn" download>Download Free</a>
+        </nav>
+    </header>
+
+    <!-- Hero Section -->
+    <section class="hero">
+        <div class="container">
+            <div class="hero-content">
+                <div class="hero-robot">🤖</div>
+                <h1>Meet Your New Focus Companion</h1>
+                <p class="subtitle">FocusdBot is an adorable robot that lives in your menu bar, keeping you focused with smart distraction detection, beautiful analytics, and Pomodoro timers.</p>
+                
+                <div class="hero-buttons">
+                    <a href="dist/FocusdBot-1.0.0.zip" class="btn-primary" download>
+                        📥 Download for macOS
+                    </a>
+                    <a href="#features" class="btn-secondary">
+                        ✨ See Features
+                    </a>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Features Section -->
+    <section class="features" id="features">
+        <div class="container">
+            <h2 class="section-title">Powerful Features, Simple Design</h2>
+            <p class="section-subtitle">Everything you need to boost your productivity and stay focused, wrapped in a delightful package.</p>
+            
+            <div class="features-grid">
+                <div class="feature-card">
+                    <div class="feature-icon" style="background: linear-gradient(135deg, #4A90E2, #5856D6);">🤖</div>
+                    <h3>Adorable Robot Companion</h3>
+                    <p>Your personal focus buddy lives in the menu bar, changes colors with your mood, and gets angry when you're distracted. He's surprisingly motivating!</p>
+                </div>
+                
+                <div class="feature-card">
+                    <div class="feature-icon" style="background: linear-gradient(135deg, #34C759, #30D158);">📊</div>
+                    <h3>Beautiful Analytics</h3>
+                    <p>Track your focus patterns with stunning charts and insights. See daily progress, weekly trends, and discover your most productive times.</p>
+                </div>
+                
+                <div class="feature-card">
+                    <div class="feature-icon" style="background: linear-gradient(135deg, #FF9500, #FF6B35);">🚫</div>
+                    <h3>Smart Distraction Detection</h3>
+                    <p>FocusdBot knows when you're browsing social media or checking email. Customize which apps and websites are allowed during focus time.</p>
+                </div>
+                
+                <div class="feature-card">
+                    <div class="feature-icon" style="background: linear-gradient(135deg, #FF3B30, #FF6B6B);">🍅</div>
+                    <h3>Pomodoro Technique</h3>
+                    <p>Built-in Pomodoro timer with reflection prompts. After each session, jot down what you accomplished to build better habits.</p>
+                </div>
+                
+                <div class="feature-card">
+                    <div class="feature-icon" style="background: linear-gradient(135deg, #AF52DE, #BF5AF2);">📱</div>
+                    <h3>iPhone Integration</h3>
+                    <p>Connect your iPhone to track phone usage during focus sessions. Get a complete picture of your attention patterns.</p>
+                </div>
+                
+                <div class="feature-card">
+                    <div class="feature-icon" style="background: linear-gradient(135deg, #007AFF, #5856D6);">⏰</div>
+                    <h3>Beautiful Timer Styles</h3>
+                    <p>Choose from multiple timer displays: retro dot-matrix, neon glow, or clean numeric. Find the style that motivates you most.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Preview Section -->
+    <section style="padding: 80px 0; background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);">
+        <div class="container">
+            <h2 class="section-title">See FocusdBot in Action</h2>
+            <p class="section-subtitle">Experience the beautiful interface and powerful features that make productivity enjoyable.</p>
+            
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 2rem; margin-top: 3rem;">
+                <div class="feature-card">
+                    <h3>🤖 Menu Bar Companion</h3>
+                    <p>Your friendly robot lives discretely in the menu bar, changing colors with your productivity mood and providing gentle motivation.</p>
+                    <div style="background: #f0f0f0; padding: 1rem; border-radius: 8px; margin-top: 1rem; font-family: monospace; font-size: 0.9rem;">
+                        <div style="background: #333; color: #0f0; padding: 0.5rem; border-radius: 4px;">
+                        🤖 FocusdBot • ⏱️ 25:00 • 📊 Dashboard
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="feature-card">
+                    <h3>📊 Beautiful Analytics</h3>
+                    <p>Track your focus patterns with stunning charts that show daily progress, weekly trends, and productivity insights.</p>
+                    <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 1rem; border-radius: 8px; margin-top: 1rem; color: white; text-align: center;">
+                        <div style="font-size: 1.2rem; margin-bottom: 0.5rem;">📈 Today's Focus</div>
+                        <div>🎯 3 Sessions • ⏰ 75min Focused • 🚫 5min Distracted</div>
+                    </div>
+                </div>
+                
+                <div class="feature-card">
+                    <h3>⚙️ Smart Customization</h3>
+                    <p>Customize timer styles, set allowed websites, configure session lengths, and personalize your focus experience.</p>
+                    <div style="background: #f8f9fa; padding: 1rem; border-radius: 8px; margin-top: 1rem; border: 2px solid #e9ecef;">
+                        <div style="margin-bottom: 0.5rem;">⏱️ Timer Style: Dot Matrix</div>
+                        <div style="margin-bottom: 0.5rem;">🕐 Duration: 25 minutes</div>
+                        <div>🌐 Allowed: GitHub, Docs, Slack</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Stats Section -->
+    <section class="stats">
+        <div class="container">
+            <h2 class="section-title" style="color: white;">Productivity Made Simple</h2>
+            <div class="stats-grid">
+                <div class="stat-item">
+                    <h3>25min</h3>
+                    <p>Perfect focus sessions</p>
+                </div>
+                <div class="stat-item">
+                    <h3>0</h3>
+                    <p>Complex setup required</p>
+                </div>
+                <div class="stat-item">
+                    <h3>∞</h3>
+                    <p>Cute robot reactions</p>
+                </div>
+                <div class="stat-item">
+                    <h3>Free</h3>
+                    <p>Always and forever</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Download Section -->
+    <section class="download-section" id="download">
+        <div class="container">
+            <h2>Ready to Focus Better?</h2>
+            <p>Download FocusdBot and meet your new productivity companion.</p>
+            
+            <div class="download-card">
+                <h3 style="margin-bottom: 1rem;">Download FocusdBot</h3>
+                <a href="dist/FocusdBot-1.0.0.zip" class="btn-primary" style="display: inline-block; margin-bottom: 1rem;" download>
+                    📥 Download for macOS (2.4MB)
+                </a>
+                <div class="system-req">
+                    <p><strong>System Requirements:</strong><br>
+                    • macOS 13 (Ventura) or later<br>
+                    • Universal Binary (Intel & Apple Silicon)<br>
+                    • Version 1.0.0 • Free Forever</p>
+                </div>
+                
+                <div style="margin-top: 1.5rem; padding: 1rem; background: rgba(255,255,255,0.1); border-radius: 8px; font-size: 0.9rem;">
+                    <strong>Quick Installation:</strong><br>
+                    1. Download and unzip the ZIP file<br>
+                    2. Drag FocusdBot.app to Applications<br>
+                    3. <strong>Right-click</strong> FocusdBot.app → "Open" (bypasses security)<br>
+                    4. Click "Open" when prompted<br>
+                    5. Look for 🤖 in your menu bar! 🚀
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer>
+        <div class="container">
+            <div class="footer-content">
+                <div class="footer-section">
+                    <h4>Product</h4>
+                    <ul>
+                        <li><a href="#features">Features</a></li>
+                        <li><a href="#download">Download</a></li>
+                        <li><a href="#">Release Notes</a></li>
+                    </ul>
+                </div>
+                <div class="footer-section">
+                    <h4>Support</h4>
+                    <ul>
+                        <li><a href="#">Documentation</a></li>
+                        <li><a href="#">FAQ</a></li>
+                        <li><a href="#">Contact</a></li>
+                    </ul>
+                </div>
+                <div class="footer-section">
+                    <h4>Company</h4>
+                    <ul>
+                        <li><a href="#">About</a></li>
+                        <li><a href="#">Privacy</a></li>
+                        <li><a href="#">Terms</a></li>
+                    </ul>
+                </div>
+            </div>
+            <div class="footer-bottom">
+                <p>&copy; 2024 FocusdBot. Made with ❤️ for productivity enthusiasts.</p>
+            </div>
+        </div>
+    </footer>
+
+    <script>
+        // Smooth scrolling for anchor links
+        document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+            anchor.addEventListener('click', function (e) {
+                e.preventDefault();
+                const target = document.querySelector(this.getAttribute('href'));
+                if (target) {
+                    target.scrollIntoView({
+                        behavior: 'smooth',
+                        block: 'start'
+                    });
+                }
+            });
+        });
+
+        // Add some interactivity to the hero robot
+        const heroRobot = document.querySelector('.hero-robot');
+        heroRobot.addEventListener('click', function() {
+            this.style.transform = 'scale(1.1) rotate(10deg)';
+            setTimeout(() => {
+                this.style.transform = 'scale(1) rotate(0deg)';
+            }, 200);
+        });
+
+        // Track download clicks for analytics
+        document.querySelectorAll('a[download]').forEach(link => {
+            link.addEventListener('click', function() {
+                // Analytics tracking would go here
+                console.log('Download initiated:', this.href);
+                
+                // Show a nice confirmation
+                const originalText = this.textContent;
+                this.textContent = '✅ Download Started!';
+                this.style.background = '#34C759';
+                
+                setTimeout(() => {
+                    this.textContent = originalText;
+                    this.style.background = '';
+                }, 2000);
+            });
+        });
+    </script>
+</body>
+</html>

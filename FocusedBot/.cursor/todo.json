@@ -1,0 +1,37 @@
+[
+    {
+      "id": "db_migration_sessionEvent",
+      "content": "Add migration: aiSummary TEXT column to session table; create sessionEvent table (id PK, sessionId FK, tStart REAL, tEnd REAL, kind TEXT, title TEXT, detail TEXT). Add SessionEvent model in Database.swift.",
+      "status": "pending"
+    },
+    {
+      "id": "activity_monitor",
+      "content": "Create ActivityMonitor.swift that polls front-most window every 5 s (CGWindowListCopyWindowInfo via Accessibility). Log window title changes to sessionEvent (kind=\"window\").",
+      "status": "pending"
+    },
+    {
+      "id": "media_watcher",
+      "content": "Create MediaWatcher.swift that listens to Music (com.apple.Music.playerInfo) and Spotify (com.spotify.client.PlaybackStateChanged). Log now-playing info to sessionEvent (kind=\"media\").",
+      "status": "pending"
+    },
+    {
+      "id": "botmodel_integration_monitors",
+      "content": "Start/stop ActivityMonitor and MediaWatcher in BotModel (startPomodoro / finalizeSession) and persist any open events.",
+      "status": "pending"
+    },
+    {
+      "id": "ai_summary",
+      "content": "Add AISummary.swift that builds a prompt from session data, calls OpenAI Chat API, saves text to session.aiSummary, or stubs if key absent.",
+      "status": "pending"
+    },
+    {
+      "id": "ui_updates_summary",
+      "content": "Show aiSummary in Reflection popup and Dashboard Today tab.",
+      "status": "pending"
+    },
+    {
+      "id": "permission_handling",
+      "content": "Detect Accessibility permission; if not granted, show alert and open System Settings → Privacy & Security → Accessibility.",
+      "status": "pending"
+    }
+  ]

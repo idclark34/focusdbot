@@ -1,0 +1,685 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FocusdBot Explained - A Beginner's Guide</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --primary: #007AFF;
+            --secondary: #5856D6;
+            --success: #34C759;
+            --warning: #FF9500;
+            --danger: #FF3B30;
+            --robot-blue: #4A90E2;
+            --bg: #f8f9fa;
+            --card-bg: #ffffff;
+            --text: #1C1C1E;
+            --text-light: #8E8E93;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', system-ui, sans-serif;
+            line-height: 1.6;
+            color: var(--text);
+            background: var(--bg);
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 20px;
+        }
+
+        /* Header */
+        header {
+            background: linear-gradient(135deg, var(--primary), var(--secondary));
+            color: white;
+            padding: 60px 0;
+            text-align: center;
+        }
+
+        .hero h1 {
+            font-size: 3.5rem;
+            font-weight: 700;
+            margin-bottom: 1rem;
+        }
+
+        .hero p {
+            font-size: 1.5rem;
+            opacity: 0.9;
+            max-width: 600px;
+            margin: 0 auto 2rem;
+        }
+
+        .robot-demo {
+            width: 120px;
+            height: 120px;
+            margin: 2rem auto;
+            animation: float 3s ease-in-out infinite;
+        }
+
+        @keyframes float {
+            0%, 100% { transform: translateY(0px); }
+            50% { transform: translateY(-10px); }
+        }
+
+        /* Sections */
+        section {
+            padding: 80px 0;
+        }
+
+        .section-title {
+            text-align: center;
+            font-size: 2.5rem;
+            font-weight: 700;
+            margin-bottom: 3rem;
+            color: var(--text);
+        }
+
+        .cards-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+            gap: 2rem;
+            margin-top: 3rem;
+        }
+
+        .card {
+            background: var(--card-bg);
+            border-radius: 16px;
+            padding: 2rem;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+        }
+
+        .card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 8px 30px rgba(0,0,0,0.15);
+        }
+
+        .card-icon {
+            width: 60px;
+            height: 60px;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 2rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .card h3 {
+            font-size: 1.5rem;
+            font-weight: 600;
+            margin-bottom: 1rem;
+        }
+
+        .card p {
+            color: var(--text-light);
+            line-height: 1.7;
+        }
+
+        /* Visual Flow Diagram */
+        .flow-diagram {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin: 4rem 0;
+            flex-wrap: wrap;
+            gap: 2rem;
+        }
+
+        .flow-step {
+            background: var(--card-bg);
+            border-radius: 16px;
+            padding: 2rem;
+            text-align: center;
+            flex: 1;
+            min-width: 250px;
+            position: relative;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+        }
+
+        .flow-step::after {
+            content: '→';
+            position: absolute;
+            right: -25px;
+            top: 50%;
+            transform: translateY(-50%);
+            font-size: 2rem;
+            color: var(--primary);
+            font-weight: bold;
+        }
+
+        .flow-step:last-child::after {
+            display: none;
+        }
+
+        .step-number {
+            background: var(--primary);
+            color: white;
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            margin: 0 auto 1rem;
+        }
+
+        /* Robot States Visualization */
+        .robot-states {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 2rem;
+            margin: 3rem 0;
+        }
+
+        .robot-state {
+            text-align: center;
+            background: var(--card-bg);
+            border-radius: 16px;
+            padding: 2rem;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+        }
+
+        .robot-visual {
+            width: 80px;
+            height: 80px;
+            border-radius: 16px;
+            margin: 0 auto 1rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 2.5rem;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+        }
+
+        .state-idle { background: linear-gradient(135deg, #E3F2FD, #BBDEFB); }
+        .state-focused { background: linear-gradient(135deg, #E8F5E8, #C8E6C9); }
+        .state-distracted { background: linear-gradient(135deg, #FFEBEE, #FFCDD2); }
+        .state-success { background: linear-gradient(135deg, #E8F5E8, #A5D6A7); }
+
+        /* Tech Stack */
+        .tech-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 2rem;
+            margin: 3rem 0;
+        }
+
+        .tech-category {
+            background: var(--card-bg);
+            border-radius: 16px;
+            padding: 2rem;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+        }
+
+        .tech-category h4 {
+            color: var(--primary);
+            font-size: 1.3rem;
+            margin-bottom: 1rem;
+            font-weight: 600;
+        }
+
+        .tech-list {
+            list-style: none;
+        }
+
+        .tech-list li {
+            padding: 0.5rem 0;
+            border-bottom: 1px solid #f0f0f0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .tech-list li:last-child {
+            border-bottom: none;
+        }
+
+        .tech-badge {
+            background: var(--primary);
+            color: white;
+            padding: 0.2rem 0.8rem;
+            border-radius: 12px;
+            font-size: 0.8rem;
+            font-weight: 500;
+        }
+
+        /* Architecture Diagram */
+        .arch-diagram {
+            background: var(--card-bg);
+            border-radius: 16px;
+            padding: 3rem;
+            margin: 3rem 0;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+        }
+
+        .arch-layers {
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+        }
+
+        .arch-layer {
+            background: linear-gradient(135deg, var(--primary), var(--secondary));
+            color: white;
+            padding: 1.5rem;
+            border-radius: 12px;
+            text-align: center;
+            position: relative;
+        }
+
+        .arch-layer::after {
+            content: '↓';
+            position: absolute;
+            bottom: -15px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 1.5rem;
+            color: var(--primary);
+        }
+
+        .arch-layer:last-child::after {
+            display: none;
+        }
+
+        /* Installation Steps */
+        .install-steps {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 2rem;
+            margin: 3rem 0;
+        }
+
+        .install-step {
+            background: var(--card-bg);
+            border-radius: 16px;
+            padding: 2rem;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+            text-align: center;
+        }
+
+        .install-icon {
+            width: 80px;
+            height: 80px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, var(--success), #66BB6A);
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 2rem;
+            margin: 0 auto 1.5rem;
+        }
+
+        .code-block {
+            background: #2d3748;
+            color: #e2e8f0;
+            border-radius: 8px;
+            padding: 1rem;
+            margin: 1rem 0;
+            font-family: 'Monaco', 'Menlo', monospace;
+            overflow-x: auto;
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .hero h1 { font-size: 2.5rem; }
+            .hero p { font-size: 1.2rem; }
+            .section-title { font-size: 2rem; }
+            .flow-diagram { flex-direction: column; }
+            .flow-step::after { display: none; }
+        }
+    </style>
+</head>
+<body>
+    <!-- Header -->
+    <header>
+        <div class="container">
+            <div class="hero">
+                <div class="robot-demo">🤖</div>
+                <h1>FocusdBot Explained</h1>
+                <p>A complete beginner's guide to understanding how FocusdBot works, what it does, and how it's built</p>
+            </div>
+        </div>
+    </header>
+
+    <!-- What is FocusdBot -->
+    <section>
+        <div class="container">
+            <h2 class="section-title">What is FocusdBot? 🤔</h2>
+            
+            <div class="cards-grid">
+                <div class="card">
+                    <div class="card-icon" style="background: linear-gradient(135deg, #E3F2FD, #BBDEFB);">🤖</div>
+                    <h3>Your Focus Companion</h3>
+                    <p>FocusdBot is a cute robot that lives in your Mac's menu bar and helps you stay focused while working. Think of it as a friendly productivity coach that watches over your computer habits.</p>
+                </div>
+
+                <div class="card">
+                    <div class="card-icon" style="background: linear-gradient(135deg, #E8F5E8, #C8E6C9);">⏱️</div>
+                    <h3>Pomodoro Timer</h3>
+                    <p>It uses the famous Pomodoro Technique - work for 25 minutes, then take a 5-minute break. The robot shows a countdown timer and celebrates when you complete a session!</p>
+                </div>
+
+                <div class="card">
+                    <div class="card-icon" style="background: linear-gradient(135deg, #FFF3E0, #FFE0B2);">👀</div>
+                    <h3>Smart Monitoring</h3>
+                    <p>The robot can detect when you switch to distracting apps (like social media) and gently reminds you to get back to work by changing colors and expressions.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- How It Works -->
+    <section style="background: var(--card-bg);">
+        <div class="container">
+            <h2 class="section-title">How Does It Work? ⚙️</h2>
+            
+            <div class="flow-diagram">
+                <div class="flow-step">
+                    <div class="step-number">1</div>
+                    <h3>You Start Working</h3>
+                    <p>Click the robot to start a 25-minute focus session. The robot turns blue and shows a countdown timer.</p>
+                </div>
+
+                <div class="flow-step">
+                    <div class="step-number">2</div>
+                    <h3>Robot Watches</h3>
+                    <p>FocusdBot monitors which apps you're using. It knows the difference between work apps and distracting ones.</p>
+                </div>
+
+                <div class="flow-step">
+                    <div class="step-number">3</div>
+                    <h3>Gentle Reminders</h3>
+                    <p>If you switch to a distracting app, the robot turns red and looks angry - a gentle nudge to get back to work!</p>
+                </div>
+
+                <div class="flow-step">
+                    <div class="step-number">4</div>
+                    <h3>Celebration Time</h3>
+                    <p>Complete your 25 minutes and the robot turns green, shows confetti, and asks you to reflect on what you accomplished!</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Robot States -->
+    <section>
+        <div class="container">
+            <h2 class="section-title">Meet Your Robot's Moods 😊</h2>
+            
+            <div class="robot-states">
+                <div class="robot-state">
+                    <div class="robot-visual state-idle">😴</div>
+                    <h3>Idle</h3>
+                    <p>Waiting for you to start a focus session. The robot breathes gently and wiggles occasionally.</p>
+                </div>
+
+                <div class="robot-state">
+                    <div class="robot-visual state-focused">😊</div>
+                    <h3>Focused</h3>
+                    <p>You're working! The robot is happy, shows a blue color, and displays your remaining time.</p>
+                </div>
+
+                <div class="robot-state">
+                    <div class="robot-visual state-distracted">😠</div>
+                    <h3>Distracted</h3>
+                    <p>Uh oh! You're on a distracting app. The robot turns red and pulses to get your attention.</p>
+                </div>
+
+                <div class="robot-state">
+                    <div class="robot-visual state-success">🎉</div>
+                    <h3>Success!</h3>
+                    <p>You did it! The robot turns green, shows confetti, and celebrates your completed focus session.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Features -->
+    <section style="background: var(--card-bg);">
+        <div class="container">
+            <h2 class="section-title">Cool Features 🚀</h2>
+            
+            <div class="cards-grid">
+                <div class="card">
+                    <div class="card-icon" style="background: linear-gradient(135deg, #E8F5E8, #C8E6C9);">📱</div>
+                    <h3>iPhone Integration</h3>
+                    <p>Connect your iPhone! If you pick up your phone during a focus session, the robot will know and remind you to put it down.</p>
+                </div>
+
+                <div class="card">
+                    <div class="card-icon" style="background: linear-gradient(135deg, #E3F2FD, #BBDEFB);">🌐</div>
+                    <h3>Website Blocking</h3>
+                    <p>Block distracting websites in Safari! Add sites like Reddit or Twitter to your blocked list during focus time.</p>
+                </div>
+
+                <div class="card">
+                    <div class="card-icon" style="background: linear-gradient(135deg, #FFF3E0, #FFE0B2);">📊</div>
+                    <h3>Beautiful Analytics</h3>
+                    <p>See how much time you spent focused vs distracted, which apps steal your attention most, and track your progress over time.</p>
+                </div>
+
+                <div class="card">
+                    <div class="card-icon" style="background: linear-gradient(135deg, #F3E5F5, #E1BEE7);">🎨</div>
+                    <h3>Customizable</h3>
+                    <p>Choose different timer display styles (neon, gradient, dot matrix), adjust durations, and pick which apps are allowed during focus time.</p>
+                </div>
+
+                <div class="card">
+                    <div class="card-icon" style="background: linear-gradient(135deg, #E8F5E8, #C8E6C9);">📝</div>
+                    <h3>Session Reflections</h3>
+                    <p>After each session, reflect on what you accomplished. The app builds a history of your focus sessions and insights.</p>
+                </div>
+
+                <div class="card">
+                    <div class="card-icon" style="background: linear-gradient(135deg, #FFEBEE, #FFCDD2);">🔒</div>
+                    <h3>Privacy First</h3>
+                    <p>Everything stays on your Mac! No data is sent to the internet. Your focus habits are private and secure.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Technical Architecture -->
+    <section>
+        <div class="container">
+            <h2 class="section-title">How is it Built? 🔧</h2>
+            
+            <div class="arch-diagram">
+                <h3 style="text-align: center; margin-bottom: 2rem;">Technical Architecture</h3>
+                <div class="arch-layers">
+                    <div class="arch-layer">
+                        <strong>User Interface (SwiftUI)</strong><br>
+                        The cute robot, timer displays, menu bar, and settings screens
+                    </div>
+                    <div class="arch-layer">
+                        <strong>App Monitoring (macOS APIs)</strong><br>
+                        Watches which apps you use and detects when you switch between them
+                    </div>
+                    <div class="arch-layer">
+                        <strong>Data Storage (SQLite Database)</strong><br>
+                        Remembers your sessions, app usage, and statistics over time
+                    </div>
+                    <div class="arch-layer">
+                        <strong>System Integration (Accessibility & AppleScript)</strong><br>
+                        Connects to Safari for website blocking and gets window information
+                    </div>
+                </div>
+            </div>
+
+            <div class="tech-grid">
+                <div class="tech-category">
+                    <h4>🖥️ User Interface</h4>
+                    <ul class="tech-list">
+                        <li>SwiftUI <span class="tech-badge">Modern</span></li>
+                        <li>AppKit <span class="tech-badge">macOS</span></li>
+                        <li>Menu Bar Integration <span class="tech-badge">Native</span></li>
+                        <li>Floating Robot Window <span class="tech-badge">Custom</span></li>
+                    </ul>
+                </div>
+
+                <div class="tech-category">
+                    <h4>🧠 Intelligence</h4>
+                    <ul class="tech-list">
+                        <li>NSWorkspace API <span class="tech-badge">App Tracking</span></li>
+                        <li>Accessibility APIs <span class="tech-badge">Window Info</span></li>
+                        <li>AppleScript <span class="tech-badge">Safari</span></li>
+                        <li>Real-time Monitoring <span class="tech-badge">Live</span></li>
+                    </ul>
+                </div>
+
+                <div class="tech-category">
+                    <h4>💾 Data & Storage</h4>
+                    <ul class="tech-list">
+                        <li>SQLite Database <span class="tech-badge">Local</span></li>
+                        <li>GRDB Framework <span class="tech-badge">Swift</span></li>
+                        <li>UserDefaults <span class="tech-badge">Settings</span></li>
+                        <li>Migration System <span class="tech-badge">Updates</span></li>
+                    </ul>
+                </div>
+
+                <div class="tech-category">
+                    <h4>📱 Connectivity</h4>
+                    <ul class="tech-list">
+                        <li>MultipeerConnectivity <span class="tech-badge">iPhone</span></li>
+                        <li>Peer-to-Peer Network <span class="tech-badge">Local</span></li>
+                        <li>Real-time Sync <span class="tech-badge">Instant</span></li>
+                        <li>No Internet Required <span class="tech-badge">Offline</span></li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Getting Started -->
+    <section style="background: var(--card-bg);">
+        <div class="container">
+            <h2 class="section-title">How to Get Started 🚀</h2>
+            
+            <div class="install-steps">
+                <div class="install-step">
+                    <div class="install-icon">📥</div>
+                    <h3>1. Download & Install</h3>
+                    <p>Run the install script to build and install FocusdBot to your Applications folder.</p>
+                    <div class="code-block">./install.sh</div>
+                </div>
+
+                <div class="install-step">
+                    <div class="install-icon">🔑</div>
+                    <h3>2. Grant Permissions</h3>
+                    <p>Allow Accessibility access so FocusdBot can monitor your apps, and AppleScript access for Safari integration.</p>
+                </div>
+
+                <div class="install-step">
+                    <div class="install-icon">🎯</div>
+                    <h3>3. Start Focusing!</h3>
+                    <p>Click the robot to start your first 25-minute focus session. Configure allowed apps and websites in the menu bar.</p>
+                </div>
+            </div>
+
+            <div style="text-align: center; margin-top: 3rem;">
+                <h3>Quick Test Mode</h3>
+                <p style="color: var(--text-light); margin: 1rem 0;">New to FocusdBot? Try the 30-second test mode first!</p>
+                <div class="code-block" style="display: inline-block;">
+                    Click menu bar → Quick Test → 30s → Start Timer
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Why It's Special -->
+    <section>
+        <div class="container">
+            <h2 class="section-title">Why is FocusdBot Special? ✨</h2>
+            
+            <div class="cards-grid">
+                <div class="card">
+                    <div class="card-icon" style="background: linear-gradient(135deg, #E8F5E8, #C8E6C9);">🧠</div>
+                    <h3>Smart, Not Annoying</h3>
+                    <p>Unlike simple timers, FocusdBot actually understands your workflow. It knows when you're genuinely working vs. when you're procrastinating, and responds accordingly.</p>
+                </div>
+
+                <div class="card">
+                    <div class="card-icon" style="background: linear-gradient(135deg, #E3F2FD, #BBDEFB);">🎨</div>
+                    <h3>Delightful Experience</h3>
+                    <p>Who said productivity tools have to be boring? The cute robot animations, confetti celebrations, and smooth interactions make focusing actually fun.</p>
+                </div>
+
+                <div class="card">
+                    <div class="card-icon" style="background: linear-gradient(135deg, #FFF3E0, #FFE0B2);">📊</div>
+                    <h3>Data-Driven Insights</h3>
+                    <p>See exactly where your time goes with beautiful analytics. Discover your most distracting apps and track your improvement over time with real data.</p>
+                </div>
+
+                <div class="card">
+                    <div class="card-icon" style="background: linear-gradient(135deg, #F3E5F5, #E1BEE7);">🔒</div>
+                    <h3>Privacy by Design</h3>
+                    <p>Your data never leaves your Mac. No accounts, no cloud sync, no tracking. It's productivity software that actually respects your privacy.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer style="background: var(--text); color: white; padding: 3rem 0; text-align: center;">
+        <div class="container">
+            <h3 style="margin-bottom: 1rem;">Ready to Meet Your New Focus Companion? 🤖</h3>
+            <p style="opacity: 0.8; font-size: 1.1rem;">FocusdBot is more than just a timer - it's your personal productivity coach that makes staying focused actually enjoyable.</p>
+            <div style="margin-top: 2rem; padding: 1.5rem; background: rgba(255,255,255,0.1); border-radius: 12px; display: inline-block;">
+                <code style="color: #4ECDC4;">git clone https://github.com/your-repo/focusdbot</code>
+            </div>
+        </div>
+    </footer>
+
+    <script>
+        // Add some interactive animations
+        document.addEventListener('DOMContentLoaded', function() {
+            // Animate cards on scroll
+            const cards = document.querySelectorAll('.card, .flow-step, .robot-state');
+            
+            const observer = new IntersectionObserver((entries) => {
+                entries.forEach(entry => {
+                    if (entry.isIntersecting) {
+                        entry.target.style.opacity = '1';
+                        entry.target.style.transform = 'translateY(0)';
+                    }
+                });
+            });
+
+            cards.forEach(card => {
+                card.style.opacity = '0';
+                card.style.transform = 'translateY(20px)';
+                card.style.transition = 'opacity 0.6s ease, transform 0.6s ease';
+                observer.observe(card);
+            });
+
+            // Add click interaction to robot states
+            document.querySelectorAll('.robot-state').forEach(state => {
+                state.addEventListener('click', function() {
+                    const visual = this.querySelector('.robot-visual');
+                    visual.style.transform = 'scale(1.2)';
+                    setTimeout(() => {
+                        visual.style.transform = 'scale(1)';
+                    }, 200);
+                });
+            });
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,10 @@
+# macOS
+.DS_Store
+
+# Swift Package Manager build
+.build/
+**/.build/
+
+# Distribution artifacts
+dist/
+dmg-temp/

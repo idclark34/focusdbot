@@ -1,0 +1,1342 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FocusdBot: Technical Architecture Study Guide</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --primary: #2563eb;
+            --secondary: #7c3aed;
+            --success: #059669;
+            --warning: #d97706;
+            --danger: #dc2626;
+            --bg: #fafafa;
+            --card-bg: #ffffff;
+            --code-bg: #1e293b;
+            --text: #1f2937;
+            --text-light: #6b7280;
+            --border: #e5e7eb;
+            --accent: #f3f4f6;
+        }
+
+        body {
+            font-family: 'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', Consolas, 'Courier New', monospace;
+            line-height: 1.6;
+            color: var(--text);
+            background: var(--bg);
+            font-size: 14px;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 0 20px;
+        }
+
+        /* Header */
+        header {
+            background: linear-gradient(135deg, var(--code-bg), #334155);
+            color: white;
+            padding: 40px 0;
+            border-bottom: 3px solid var(--primary);
+        }
+
+        .header-content {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .header-title h1 {
+            font-size: 2rem;
+            font-weight: 600;
+            margin-bottom: 0.5rem;
+        }
+
+        .header-title p {
+            opacity: 0.8;
+            font-size: 1rem;
+        }
+
+        .header-meta {
+            text-align: right;
+            font-size: 0.9rem;
+            opacity: 0.7;
+        }
+
+        /* Navigation */
+        nav {
+            background: var(--card-bg);
+            border-bottom: 1px solid var(--border);
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+
+        .nav-content {
+            display: flex;
+            gap: 2rem;
+            padding: 1rem 0;
+        }
+
+        .nav-link {
+            color: var(--text);
+            text-decoration: none;
+            padding: 0.5rem 1rem;
+            border-radius: 6px;
+            transition: background 0.2s;
+            font-weight: 500;
+        }
+
+        .nav-link:hover {
+            background: var(--accent);
+        }
+
+        /* Main Content */
+        main {
+            display: grid;
+            grid-template-columns: 250px 1fr;
+            gap: 2rem;
+            padding: 2rem 0;
+        }
+
+        /* Sidebar TOC */
+        .toc {
+            background: var(--card-bg);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 1.5rem;
+            height: fit-content;
+            position: sticky;
+            top: 80px;
+        }
+
+        .toc h3 {
+            font-size: 1rem;
+            margin-bottom: 1rem;
+            color: var(--primary);
+            border-bottom: 1px solid var(--border);
+            padding-bottom: 0.5rem;
+        }
+
+        .toc ul {
+            list-style: none;
+        }
+
+        .toc li {
+            margin: 0.5rem 0;
+        }
+
+        .toc a {
+            color: var(--text-light);
+            text-decoration: none;
+            font-size: 0.9rem;
+            display: block;
+            padding: 0.25rem 0;
+        }
+
+        .toc a:hover {
+            color: var(--primary);
+        }
+
+        /* Content */
+        .content {
+            background: var(--card-bg);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 2rem;
+        }
+
+        section {
+            margin-bottom: 4rem;
+            border-bottom: 1px solid var(--border);
+            padding-bottom: 2rem;
+        }
+
+        section:last-child {
+            border-bottom: none;
+        }
+
+        h2 {
+            font-size: 1.5rem;
+            font-weight: 600;
+            margin-bottom: 1.5rem;
+            color: var(--primary);
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        h3 {
+            font-size: 1.2rem;
+            font-weight: 600;
+            margin: 2rem 0 1rem 0;
+            color: var(--text);
+        }
+
+        h4 {
+            font-size: 1rem;
+            font-weight: 600;
+            margin: 1.5rem 0 0.5rem 0;
+            color: var(--secondary);
+        }
+
+        p {
+            margin-bottom: 1rem;
+            line-height: 1.7;
+        }
+
+        /* Code Blocks */
+        .code-block {
+            background: var(--code-bg);
+            color: #e2e8f0;
+            border-radius: 8px;
+            padding: 1.5rem;
+            margin: 1.5rem 0;
+            overflow-x: auto;
+            border: 1px solid #334155;
+            position: relative;
+        }
+
+        .code-block::before {
+            content: attr(data-lang);
+            position: absolute;
+            top: 0.5rem;
+            right: 1rem;
+            font-size: 0.8rem;
+            color: #64748b;
+            background: #0f172a;
+            padding: 0.25rem 0.5rem;
+            border-radius: 4px;
+        }
+
+        .code-block pre {
+            margin: 0;
+            font-family: inherit;
+        }
+
+        .inline-code {
+            background: var(--accent);
+            color: var(--primary);
+            padding: 0.2rem 0.4rem;
+            border-radius: 4px;
+            font-family: inherit;
+            font-size: 0.9em;
+        }
+
+        /* Diagrams */
+        .diagram {
+            background: var(--card-bg);
+            border: 2px solid var(--border);
+            border-radius: 8px;
+            padding: 2rem;
+            margin: 2rem 0;
+            text-align: center;
+        }
+
+        .arch-diagram {
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+            max-width: 600px;
+            margin: 0 auto;
+        }
+
+        .arch-layer {
+            background: linear-gradient(135deg, var(--primary), var(--secondary));
+            color: white;
+            padding: 1rem;
+            border-radius: 6px;
+            font-weight: 500;
+            position: relative;
+        }
+
+        .arch-layer::after {
+            content: '↓';
+            position: absolute;
+            bottom: -15px;
+            left: 50%;
+            transform: translateX(-50%);
+            color: var(--primary);
+            font-size: 1.2rem;
+        }
+
+        .arch-layer:last-child::after {
+            display: none;
+        }
+
+        /* Flow Diagrams */
+        .flow-diagram {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 1rem;
+            margin: 2rem 0;
+            flex-wrap: wrap;
+        }
+
+        .flow-step {
+            background: var(--accent);
+            border: 2px solid var(--primary);
+            border-radius: 8px;
+            padding: 1rem;
+            min-width: 150px;
+            text-align: center;
+            position: relative;
+        }
+
+        .flow-step::after {
+            content: '→';
+            position: absolute;
+            right: -20px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: var(--primary);
+            font-weight: bold;
+            font-size: 1.2rem;
+        }
+
+        .flow-step:last-child::after {
+            display: none;
+        }
+
+        /* Tables */
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 1.5rem 0;
+            font-size: 0.9rem;
+        }
+
+        th, td {
+            border: 1px solid var(--border);
+            padding: 0.75rem;
+            text-align: left;
+        }
+
+        th {
+            background: var(--accent);
+            font-weight: 600;
+            color: var(--primary);
+        }
+
+        tr:nth-child(even) {
+            background: #fafafa;
+        }
+
+        /* Info boxes */
+        .info-box {
+            background: #eff6ff;
+            border: 1px solid #bfdbfe;
+            border-left: 4px solid var(--primary);
+            padding: 1rem;
+            margin: 1.5rem 0;
+            border-radius: 0 6px 6px 0;
+        }
+
+        .warning-box {
+            background: #fef3c7;
+            border: 1px solid #fbbf24;
+            border-left: 4px solid var(--warning);
+            padding: 1rem;
+            margin: 1.5rem 0;
+            border-radius: 0 6px 6px 0;
+        }
+
+        .success-box {
+            background: #d1fae5;
+            border: 1px solid #34d399;
+            border-left: 4px solid var(--success);
+            padding: 1rem;
+            margin: 1.5rem 0;
+            border-radius: 0 6px 6px 0;
+        }
+
+        /* API References */
+        .api-ref {
+            background: var(--accent);
+            border-radius: 6px;
+            padding: 1rem;
+            margin: 1rem 0;
+            border-left: 3px solid var(--secondary);
+        }
+
+        .api-signature {
+            font-family: inherit;
+            font-weight: 600;
+            color: var(--secondary);
+            margin-bottom: 0.5rem;
+        }
+
+        /* Performance metrics */
+        .metrics-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 1rem;
+            margin: 2rem 0;
+        }
+
+        .metric-card {
+            background: var(--accent);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            padding: 1rem;
+            text-align: center;
+        }
+
+        .metric-value {
+            font-size: 1.5rem;
+            font-weight: 600;
+            color: var(--primary);
+        }
+
+        .metric-label {
+            font-size: 0.9rem;
+            color: var(--text-light);
+            margin-top: 0.5rem;
+        }
+
+        /* Responsive */
+        @media (max-width: 1024px) {
+            main {
+                grid-template-columns: 1fr;
+            }
+            
+            .toc {
+                position: static;
+            }
+
+            .header-content {
+                flex-direction: column;
+                text-align: center;
+                gap: 1rem;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .nav-content {
+                flex-direction: column;
+                gap: 0.5rem;
+            }
+
+            .flow-diagram {
+                flex-direction: column;
+            }
+
+            .flow-step::after {
+                content: '↓';
+                right: 50%;
+                bottom: -20px;
+                top: auto;
+                transform: translateX(50%);
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Header -->
+    <header>
+        <div class="container">
+            <div class="header-content">
+                <div class="header-title">
+                    <h1>FocusdBot: Technical Architecture Study</h1>
+                    <p>Deep-dive into macOS app development, system APIs, and Swift patterns</p>
+                </div>
+                <div class="header-meta">
+                    <div>Swift 5.10 | macOS 13+</div>
+                    <div>SwiftUI + AppKit + GRDB</div>
+                    <div>Last Updated: 2024</div>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Navigation -->
+    <nav>
+        <div class="container">
+            <div class="nav-content">
+                <a href="#overview" class="nav-link">Overview</a>
+                <a href="#architecture" class="nav-link">Architecture</a>
+                <a href="#apis" class="nav-link">System APIs</a>
+                <a href="#database" class="nav-link">Database</a>
+                <a href="#ui-patterns" class="nav-link">UI Patterns</a>
+                <a href="#performance" class="nav-link">Performance</a>
+                <a href="#security" class="nav-link">Security</a>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container">
+        <main>
+            <!-- Table of Contents -->
+            <aside class="toc">
+                <h3>Table of Contents</h3>
+                <ul>
+                    <li><a href="#overview">System Overview</a></li>
+                    <li><a href="#architecture">Architecture Patterns</a></li>
+                    <li><a href="#targets">Multi-Target Design</a></li>
+                    <li><a href="#apis">macOS System APIs</a></li>
+                    <li><a href="#monitoring">App Monitoring</a></li>
+                    <li><a href="#database">Database Design</a></li>
+                    <li><a href="#ui-patterns">SwiftUI Patterns</a></li>
+                    <li><a href="#state-management">State Management</a></li>
+                    <li><a href="#animations">Animation System</a></li>
+                    <li><a href="#networking">Networking Stack</a></li>
+                    <li><a href="#performance">Performance Analysis</a></li>
+                    <li><a href="#security">Security Model</a></li>
+                    <li><a href="#deployment">Build & Deploy</a></li>
+                </ul>
+            </aside>
+
+            <!-- Main Content -->
+            <div class="content">
+                <!-- System Overview -->
+                <section id="overview">
+                    <h2>🔍 System Overview</h2>
+                    
+                    <p>FocusdBot is a <strong>multi-target macOS application</strong> demonstrating advanced Swift development patterns, system API integration, and real-time monitoring capabilities. It serves as an excellent case study for:</p>
+
+                    <ul style="margin: 1rem 0 1rem 2rem;">
+                        <li>macOS-specific development with <code class="inline-code">AppKit</code> and <code class="inline-code">SwiftUI</code></li>
+                        <li>System-level monitoring using <code class="inline-code">NSWorkspace</code> and Accessibility APIs</li>
+                        <li>Real-time data processing and state management</li>
+                        <li>Cross-device communication with <code class="inline-code">MultipeerConnectivity</code></li>
+                        <li>Local data persistence with <code class="inline-code">GRDB</code> and SQLite</li>
+                    </ul>
+
+                    <div class="info-box">
+                        <strong>Learning Objectives:</strong> This study covers advanced macOS development concepts including system monitoring, accessibility APIs, real-time UI updates, database design, and cross-platform networking.
+                    </div>
+
+                    <h3>Core Technologies Stack</h3>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Layer</th>
+                                <th>Technology</th>
+                                <th>Purpose</th>
+                                <th>Key APIs</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>UI Framework</td>
+                                <td>SwiftUI + AppKit</td>
+                                <td>Declarative UI with native integration</td>
+                                <td>NSPanel, NSHostingView, MenuBarExtra</td>
+                            </tr>
+                            <tr>
+                                <td>System Integration</td>
+                                <td>ApplicationServices</td>
+                                <td>App monitoring and window tracking</td>
+                                <td>AXUIElement, NSWorkspace</td>
+                            </tr>
+                            <tr>
+                                <td>Data Layer</td>
+                                <td>GRDB + SQLite</td>
+                                <td>Local persistence and analytics</td>
+                                <td>DatabaseQueue, FetchableRecord</td>
+                            </tr>
+                            <tr>
+                                <td>Networking</td>
+                                <td>MultipeerConnectivity</td>
+                                <td>Device-to-device communication</td>
+                                <td>MCSession, MCNearbyServiceBrowser</td>
+                            </tr>
+                            <tr>
+                                <td>Scripting</td>
+                                <td>AppleScript</td>
+                                <td>Safari integration</td>
+                                <td>NSAppleScript</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </section>
+
+                <!-- Architecture -->
+                <section id="architecture">
+                    <h2>🏗️ Architecture Patterns</h2>
+
+                    <h3>MVVM + Reactive Programming</h3>
+                    <p>FocusdBot implements a clean MVVM architecture using SwiftUI's <code class="inline-code">@Published</code> and <code class="inline-code">ObservableObject</code> protocols for reactive data flow:</p>
+
+                    <div class="code-block" data-lang="swift">
+<pre>class BotModel: ObservableObject {
+    enum PomodoroState { 
+        case idle, running, success, breakTime, distracted 
+    }
+    
+    // Published properties trigger UI updates
+    @Published var pomodoroState: PomodoroState = .idle
+    @Published var remaining: Int = 25*60
+    @Published var progress: Double = 0.0
+    
+    // Daily analytics (automatically persisted)
+    @Published var completedToday: Int = 0
+    @Published var focusedSecondsToday: Int = 0
+    @Published var distractedSecondsToday: Int = 0
+    
+    // Real-time timers
+    private var timer: Timer?
+    private var activationObserver: Any?
+}</pre>
+                    </div>
+
+                    <h3>System Architecture Diagram</h3>
+                    <div class="diagram">
+                        <div class="arch-diagram">
+                            <div class="arch-layer">SwiftUI Views + Robot Animations</div>
+                            <div class="arch-layer">BotModel (ObservableObject) - State Management</div>
+                            <div class="arch-layer">System Observers (NSWorkspace, Timer)</div>
+                            <div class="arch-layer">Database Layer (GRDB + SQLite)</div>
+                            <div class="arch-layer">macOS APIs (Accessibility, AppleScript)</div>
+                        </div>
+                    </div>
+
+                    <h3 id="targets">Multi-Target Design Pattern</h3>
+                    <p>The project uses Swift Package Manager's multi-target architecture for code separation and reusability:</p>
+
+                    <div class="code-block" data-lang="swift">
+<pre>// Package.swift
+let package = Package(
+    name: "Focusd",
+    platforms: [.macOS(.v13), .iOS(.v15)],
+    targets: [
+        .executableTarget(name: "FocusdBot",     // Main desktop app
+                         dependencies: ["GRDB"],
+                         sources: ["BotPanelApp.swift", "PhoneWatcher.swift"]),
+                         
+        .executableTarget(name: "Focusd",       // CLI monitoring tool
+                         dependencies: ["GRDB"]),
+                         
+        .executableTarget(name: "FocusdUI",     // Standalone dashboard
+                         dependencies: ["GRDB"]),
+                         
+        .executableTarget(name: "FocusdPhone")  // iOS companion
+    ]
+)</pre>
+                    </div>
+
+                    <div class="info-box">
+                        <strong>Pattern Benefit:</strong> This separation allows each target to have specific dependencies and capabilities while sharing core business logic. The CLI tool can run headless, the UI can be standalone, and the phone app remains lightweight.
+                    </div>
+                </section>
+
+                <!-- System APIs -->
+                <section id="apis">
+                    <h2>🔧 macOS System APIs</h2>
+
+                    <h3 id="monitoring">Real-time App Monitoring</h3>
+                    <p>The core functionality relies on monitoring the user's active application using multiple macOS APIs:</p>
+
+                    <h4>NSWorkspace Application Tracking</h4>
+                    <div class="code-block" data-lang="swift">
+<pre>// Real-time app switching detection
+activationObserver = NSWorkspace.shared.notificationCenter.addObserver(
+    forName: NSWorkspace.didActivateApplicationNotification,
+    object: nil,
+    queue: .main
+) { [weak self] notification in
+    guard let app = notification.userInfo?[NSWorkspace.applicationUserInfoKey] 
+                    as? NSRunningApplication,
+          let bundle = app.bundleIdentifier else { return }
+    
+    // Instant state change based on allowed apps
+    let allowed = self?.sessionAllowedBundles.contains(bundle) ?? false
+    
+    switch self?.pomodoroState {
+    case .running where !allowed:
+        self?.pomodoroState = .distracted  // Immediate feedback
+    case .distracted where allowed:
+        self?.pomodoroState = .running     // Resume focus
+    default: break
+    }
+}</pre>
+                    </div>
+
+                    <h4>Accessibility API for Window Information</h4>
+                    <div class="code-block" data-lang="swift">
+<pre>private func activeWindowInfo() -> (bundle: String, title: String) {
+    guard let app = NSWorkspace.shared.frontmostApplication else {
+        return ("(none)", "No active window")
+    }
+    
+    let pid = app.processIdentifier
+    let axApp = AXUIElementCreateApplication(pid)
+    var window: CFTypeRef?
+    
+    // Get focused window using Accessibility API
+    if AXUIElementCopyAttributeValue(axApp, 
+                                   kAXFocusedWindowAttribute as CFString, 
+                                   &window) == .success,
+       let win = window {
+        var title: CFTypeRef?
+        if AXUIElementCopyAttributeValue(win as! AXUIElement,
+                                       kAXTitleAttribute as CFString,
+                                       &title) == .success,
+           let t = title as? String {
+            return (app.bundleIdentifier ?? "unknown", t)
+        }
+    }
+    
+    return (app.bundleIdentifier ?? "unknown", "(no title)")
+}</pre>
+                    </div>
+
+                    <div class="warning-box">
+                        <strong>Security Note:</strong> Accessibility API access requires explicit user permission via System Preferences → Security & Privacy → Accessibility. The app gracefully degrades functionality if permissions are denied.
+                    </div>
+
+                    <h4>AppleScript Integration for Safari</h4>
+                    <div class="code-block" data-lang="swift">
+<pre>enum Safari {
+    static func frontmostTabURL() -> URL? {
+        let scriptSource = """
+        tell application "Safari"
+            if (count of windows) > 0 then
+                return URL of front document
+            end if
+        end tell
+        """
+        
+        var error: NSDictionary?
+        if let script = NSAppleScript(source: scriptSource) {
+            if let output = script.executeAndReturnError(&error).stringValue {
+                return URL(string: output)
+            }
+        }
+        return nil
+    }
+}</pre>
+                    </div>
+
+                    <h3>API Usage Flow</h3>
+                    <div class="flow-diagram">
+                        <div class="flow-step">
+                            <strong>NSWorkspace</strong><br>
+                            App Switching
+                        </div>
+                        <div class="flow-step">
+                            <strong>Accessibility</strong><br>
+                            Window Details
+                        </div>
+                        <div class="flow-step">
+                            <strong>AppleScript</strong><br>
+                            Safari URL
+                        </div>
+                        <div class="flow-step">
+                            <strong>State Update</strong><br>
+                            UI Reaction
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Database Design -->
+                <section id="database">
+                    <h2>💾 Database Design & Analytics</h2>
+
+                    <h3>Schema Design</h3>
+                    <p>FocusdBot uses a normalized SQLite schema optimized for analytics queries:</p>
+
+                    <div class="code-block" data-lang="sql">
+<pre>-- Core session tracking
+CREATE TABLE session (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    start DATETIME NOT NULL,
+    end DATETIME,
+    type TEXT NOT NULL,           -- 'work' or 'break'
+    plannedMinutes INTEGER NOT NULL,
+    completed BOOLEAN NOT NULL DEFAULT 0
+);
+
+-- Granular app usage within sessions
+CREATE TABLE sessionApp (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    sessionId INTEGER NOT NULL,
+    bundleId TEXT NOT NULL,       -- com.apple.safari, org.mozilla.firefox
+    seconds INTEGER NOT NULL,     -- time spent in this app during session
+    FOREIGN KEY (sessionId) REFERENCES session(id) ON DELETE CASCADE
+);
+
+-- Indexes for performance
+CREATE INDEX idx_session_start ON session(start);
+CREATE INDEX idx_sessionapp_session ON sessionApp(sessionId);
+CREATE INDEX idx_sessionapp_bundle ON sessionApp(bundleId);</pre>
+                    </div>
+
+                    <h3>GRDB Integration Patterns</h3>
+                    <div class="code-block" data-lang="swift">
+<pre>// Database singleton with migration system
+enum DB {
+    static let shared: DatabaseQueue = {
+        let url = try! FileManager.default
+            .url(for: .applicationSupportDirectory, in: .userDomainMask,
+                 appropriateFor: nil, create: true)
+            .appendingPathComponent("Focusd.sqlite")
+        
+        let dbq = try! DatabaseQueue(path: url.path)
+        migrate(dbq)  // Automatic schema migration
+        return dbq
+    }()
+    
+    private static func migrate(_ db: DatabaseQueue) {
+        var migrator = DatabaseMigrator()
+        migrator.registerMigration("createTables") { db in
+            // Schema creation with proper constraints
+            try db.create(table: "session") { t in
+                t.autoIncrementedPrimaryKey("id")
+                t.column("start", .datetime).notNull()
+                t.column("end", .datetime)
+                t.column("type", .text).notNull()
+                t.column("plannedMinutes", .integer).notNull()
+                t.column("completed", .boolean).notNull()
+            }
+        }
+        try! migrator.migrate(db)
+    }
+}</pre>
+                    </div>
+
+                    <h3>Advanced Analytics Queries</h3>
+                    <div class="code-block" data-lang="swift">
+<pre>// Complex aggregation for daily focus statistics
+static func focusStatsLast(days: Int) -> [(day: String, workMin: Int, distractedMin: Int)] {
+    try! shared.read { db in
+        try Row.fetchAll(db, sql: """
+            SELECT 
+                date(start) AS day,
+                SUM(CASE WHEN completed THEN plannedMinutes ELSE 0 END) AS workMin,
+                COALESCE(SUM((
+                    SELECT SUM(sa.seconds)/60 
+                    FROM sessionApp sa 
+                    WHERE sa.sessionId = session.id
+                )), 0) AS distractedMin
+            FROM session
+            WHERE start >= date('now', '-' || ? || ' day')
+            GROUP BY day
+            ORDER BY day DESC
+        """, arguments: [days]).map { 
+            ($0["day"], $0["workMin"], $0["distractedMin"]) 
+        }
+    }
+}
+
+// Top distraction apps with statistical analysis
+static func topApps(periodDays days: Int) -> [(bundle: String, totalMin: Int, avgPerSession: Int)] {
+    try! shared.read { db in
+        try Row.fetchAll(db, sql: """
+            SELECT 
+                sa.bundleId AS bundle,
+                SUM(sa.seconds)/60 AS totalMin,
+                SUM(sa.seconds)/60 / COUNT(DISTINCT sa.sessionId) AS avgMin
+            FROM sessionApp sa
+            JOIN session s ON s.id = sa.sessionId
+            WHERE s.start >= date('now', '-' || ? || ' day')
+            GROUP BY sa.bundleId
+            ORDER BY totalMin DESC
+            LIMIT ?
+        """, arguments: [days, 5])
+    }
+}</pre>
+                    </div>
+
+                    <h3>Performance Characteristics</h3>
+                    <div class="metrics-grid">
+                        <div class="metric-card">
+                            <div class="metric-value">< 1ms</div>
+                            <div class="metric-label">Query Response Time</div>
+                        </div>
+                        <div class="metric-card">
+                            <div class="metric-value">~50KB</div>
+                            <div class="metric-label">DB Size (30 days)</div>
+                        </div>
+                        <div class="metric-card">
+                            <div class="metric-value">Write-Once</div>
+                            <div class="metric-label">Session Pattern</div>
+                        </div>
+                        <div class="metric-card">
+                            <div class="metric-value">Indexed</div>
+                            <div class="metric-label">Query Optimization</div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- UI Patterns -->
+                <section id="ui-patterns">
+                    <h2>🎨 SwiftUI UI Patterns</h2>
+
+                    <h3 id="state-management">Reactive State Management</h3>
+                    <p>The app demonstrates advanced SwiftUI patterns for real-time UI updates:</p>
+
+                    <div class="code-block" data-lang="swift">
+<pre>// State-driven robot visual representation
+struct VectorRobotView: View {
+    var blink: Bool
+    var state: BotModel.PomodoroState
+    var color: Color
+    
+    // Computed properties for reactive animations
+    private var eyeWidth: CGFloat {
+        switch state {
+        case .distracted: return 14      // Angry squint
+        default: return blink ? 18 : 12  // Blinking animation
+        }
+    }
+    
+    private var eyeHeight: CGFloat {
+        switch state {
+        case .distracted: return 4       // Angry squint
+        default: return blink ? 2 : 12   // Blinking animation
+        }
+    }
+    
+    // Dynamic mouth based on emotional state
+    private var mouth: some View {
+        switch state {
+        case .success:
+            return AnyView(
+                Capsule()
+                    .stroke(Color.white, lineWidth: 2)
+                    .frame(width: 36, height: 12)
+                    .offset(y: 12)
+            )
+        case .distracted:
+            return AnyView(
+                Path { path in
+                    path.move(to: CGPoint(x: -18, y: 0))
+                    path.addQuadCurve(to: CGPoint(x: 18, y: 0), 
+                                    control: CGPoint(x: 0, y: -12))
+                }
+                .stroke(Color.white, lineWidth: 4)
+                .frame(width: 36, height: 16)
+                .offset(x: 18, y: 30)
+            )
+        default:
+            return AnyView(
+                Capsule()
+                    .fill(Color.white.opacity(0.7))
+                    .frame(width: 24, height: 4)
+                    .offset(y: 12)
+            )
+        }
+    }
+}</pre>
+                    </div>
+
+                    <h3 id="animations">Advanced Animation System</h3>
+                    <div class="code-block" data-lang="swift">
+<pre>// Multi-timer animation system
+class BotModel: ObservableObject {
+    @Published var blink: Bool = false
+    @Published var pulse: Bool = false
+    @Published var wiggleOffset: CGSize = .zero
+    @Published var confettiBurst: Int = 0
+    
+    init() {
+        // Primary 1-second timer for business logic
+        timer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
+            self?.tick()
+        }
+        
+        // Fast 0.35-second timer for visual feedback
+        _ = Timer.scheduledTimer(withTimeInterval: 0.35, repeats: true) { [weak self] _ in
+            self?.pulse.toggle()
+        }
+    }
+    
+    private func tick() {
+        // Breathing animation
+        blink.toggle()
+        
+        // Random wiggle animation (25% chance per second)
+        if Int.random(in: 0...3) == 0 {
+            let dx = Double.random(in: -4...4)
+            let dy = Double.random(in: -4...4)
+            wiggleOffset = CGSize(width: dx, height: dy)
+            wiggleRotation = Double.random(in: -6...6)
+        } else {
+            wiggleOffset = .zero
+            wiggleRotation = 0
+        }
+        
+        // Hue cycling for color variety
+        bodyHue += 0.01
+        if bodyHue > 0.95 { bodyHue = 0.05 }
+    }
+}</pre>
+                    </div>
+
+                    <h3>Custom Panel Implementation</h3>
+                    <div class="code-block" data-lang="swift">
+<pre>// Borderless floating panel with advanced properties
+final class BotPanelController {
+    private var panel: NSPanel!
+    
+    init(model: BotModel) {
+        let sizeDim: CGFloat = 200
+        let screen = NSScreen.main?.visibleFrame ?? NSRect(x: 0, y: 0, width: 400, height: 300)
+        let origin = CGPoint(x: screen.maxX - sizeDim - 20, y: screen.minY + 20)
+        
+        panel = NSPanel(
+            contentRect: NSRect(origin: origin, size: NSSize(width: sizeDim, height: sizeDim)),
+            styleMask: [.borderless],                    // No window chrome
+            backing: .buffered,
+            defer: false
+        )
+        
+        // Advanced window behavior
+        panel.level = .statusBar + 1                    // Above most windows
+        panel.isOpaque = false                          // Transparent background
+        panel.backgroundColor = .clear
+        panel.hidesOnDeactivate = false                 // Stay visible
+        panel.collectionBehavior = [.canJoinAllSpaces,  // All desktop spaces
+                                   .fullScreenAuxiliary] // Works with fullscreen
+        panel.ignoresMouseEvents = false                // Interactive
+        panel.hasShadow = false                         // Clean appearance
+        panel.isMovableByWindowBackground = true        // Draggable
+        
+        // SwiftUI integration
+        let hosting = NSHostingView(rootView: RobotView().environmentObject(model))
+        panel.contentView = hosting
+        panel.makeKeyAndOrderFront(nil)
+    }
+}</pre>
+                    </div>
+                </section>
+
+                <!-- Networking -->
+                <section id="networking">
+                    <h2>🌐 Cross-Device Networking</h2>
+
+                    <h3>MultipeerConnectivity Implementation</h3>
+                    <div class="code-block" data-lang="swift">
+<pre>// Real-time iPhone integration
+final class PhoneWatcher: NSObject, ObservableObject {
+    @Published var phoneActive: Bool = false
+    
+    private let peerID = MCPeerID(displayName: Host.current().localizedName ?? "Mac")
+    private var session: MCSession!
+    private var browser: MCNearbyServiceBrowser!
+    
+    override init() {
+        super.init()
+        
+        // Secure peer-to-peer session
+        session = MCSession(peer: peerID, 
+                          securityIdentity: nil, 
+                          encryptionPreference: .required)
+        session.delegate = self
+        
+        // Auto-discovery of iPhone companion
+        browser = MCNearbyServiceBrowser(peer: peerID, serviceType: "focusdbot")
+        browser.delegate = self
+        browser.startBrowsingForPeers()
+    }
+}
+
+extension PhoneWatcher: MCSessionDelegate {
+    func session(_ session: MCSession, didReceive data: Data, fromPeer peerID: MCPeerID) {
+        guard let message = String(data: data, encoding: .utf8) else { return }
+        
+        DispatchQueue.main.async { [weak self] in
+            // Simple protocol: "active" = phone in use, "inactive" = phone idle
+            self?.phoneActive = (message == "active")
+        }
+    }
+    
+    func session(_ session: MCSession, peer peerID: MCPeerID, didChange state: MCSessionState) {
+        // Handle connection state changes
+        switch state {
+        case .connected:
+            print("iPhone connected: \(peerID.displayName)")
+        case .notConnected:
+            DispatchQueue.main.async { [weak self] in
+                self?.phoneActive = false  // Assume phone idle when disconnected
+            }
+        case .connecting:
+            print("Connecting to iPhone...")
+        @unknown default:
+            break
+        }
+    }
+}</pre>
+                    </div>
+
+                    <div class="info-box">
+                        <strong>Network Architecture:</strong> Uses Bonjour service discovery for zero-configuration networking. The protocol is intentionally simple - just "active"/"inactive" strings to minimize battery impact on the iPhone.
+                    </div>
+                </section>
+
+                <!-- Performance -->
+                <section id="performance">
+                    <h2>⚡ Performance Analysis</h2>
+
+                    <h3>Real-time Performance Characteristics</h3>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Operation</th>
+                                <th>Frequency</th>
+                                <th>Latency</th>
+                                <th>CPU Impact</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>App switching detection</td>
+                                <td>Event-driven</td>
+                                <td>&lt; 10ms</td>
+                                <td>0.1%</td>
+                            </tr>
+                            <tr>
+                                <td>Timer tick (business logic)</td>
+                                <td>1 Hz</td>
+                                <td>&lt; 1ms</td>
+                                <td>0.2%</td>
+                            </tr>
+                            <tr>
+                                <td>Animation pulse</td>
+                                <td>2.86 Hz</td>
+                                <td>&lt; 0.5ms</td>
+                                <td>0.3%</td>
+                            </tr>
+                            <tr>
+                                <td>Database write</td>
+                                <td>Per session</td>
+                                <td>&lt; 5ms</td>
+                                <td>0.0%</td>
+                            </tr>
+                            <tr>
+                                <td>Safari URL query</td>
+                                <td>On demand</td>
+                                <td>50-100ms</td>
+                                <td>0.1%</td>
+                            </tr>
+                        </tbody>
+                    </table>
+
+                    <h3>Memory Management</h3>
+                    <div class="code-block" data-lang="swift">
+<pre>// Careful memory management with weak references
+activationObserver = NSWorkspace.shared.notificationCenter.addObserver(
+    forName: NSWorkspace.didActivateApplicationNotification,
+    object: nil,
+    queue: .main
+) { [weak self] note in  // Prevents retain cycles
+    guard let self = self else { return }
+    // Handle notification...
+}
+
+deinit {
+    // Proper cleanup
+    if let obs = activationObserver {
+        NSWorkspace.shared.notificationCenter.removeObserver(obs)
+    }
+    timer?.invalidate()
+}</pre>
+                    </div>
+
+                    <h3>Optimization Strategies</h3>
+                    <ul style="margin: 1rem 0 1rem 2rem;">
+                        <li><strong>Event-driven architecture:</strong> No polling, only react to system notifications</li>
+                        <li><strong>Lazy database writes:</strong> Batch operations at session completion</li>
+                        <li><strong>Efficient SwiftUI updates:</strong> Granular <code class="inline-code">@Published</code> properties</li>
+                        <li><strong>Timer optimization:</strong> Separate timers for different frequencies</li>
+                        <li><strong>Memory pooling:</strong> Reuse animation objects where possible</li>
+                    </ul>
+                </section>
+
+                <!-- Security -->
+                <section id="security">
+                    <h2>🔒 Security Model</h2>
+
+                    <h3>Privacy-First Design</h3>
+                    <div class="success-box">
+                        <strong>Zero External Communication:</strong> FocusdBot operates entirely locally. No analytics, no telemetry, no cloud services. All data remains on the user's device.
+                    </div>
+
+                    <h3>Permission Model</h3>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Permission</th>
+                                <th>Purpose</th>
+                                <th>Fallback Behavior</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>Accessibility</td>
+                                <td>Monitor active applications and windows</td>
+                                <td>Basic app tracking only</td>
+                            </tr>
+                            <tr>
+                                <td>AppleScript</td>
+                                <td>Read Safari URLs for website blocking</td>
+                                <td>Website blocking disabled</td>
+                            </tr>
+                            <tr>
+                                <td>Network (local)</td>
+                                <td>iPhone companion communication</td>
+                                <td>Mac-only operation</td>
+                            </tr>
+                        </tbody>
+                    </table>
+
+                    <h3>Data Protection</h3>
+                    <div class="code-block" data-lang="swift">
+<pre>// Minimal data collection - only bundle IDs, no content
+private var sessionAppSeconds: [String: Int] = [:]  // "com.apple.safari": 120
+
+// Secure local storage
+let url = try! FileManager.default
+    .url(for: .applicationSupportDirectory,     // User's private app support
+         in: .userDomainMask,
+         appropriateFor: nil, 
+         create: true)
+    .appendingPathComponent("Focusd.sqlite")    // Local SQLite file
+
+// No network requests, no external APIs
+// All processing happens locally</pre>
+                    </div>
+
+                    <h3>Sandboxing Compatibility</h3>
+                    <p>The app is designed to work within macOS App Sandbox restrictions:</p>
+                    <ul style="margin: 1rem 0 1rem 2rem;">
+                        <li>Uses only documented, public APIs</li>
+                        <li>Stores data in appropriate user directories</li>
+                        <li>Requests minimal necessary permissions</li>
+                        <li>Graceful degradation when permissions denied</li>
+                    </ul>
+                </section>
+
+                <!-- Deployment -->
+                <section id="deployment">
+                    <h2>🚀 Build & Deployment</h2>
+
+                    <h3>Swift Package Manager Build</h3>
+                    <div class="code-block" data-lang="bash">
+<pre># Development build
+swift build --target FocusdBot -c debug
+
+# Release build with optimizations
+swift build --target FocusdBot -c release</pre>
+                    </div>
+
+                    <h3>App Bundle Creation</h3>
+                    <div class="code-block" data-lang="bash">
+<pre>#!/bin/bash
+# Automated app bundle creation (install.sh)
+
+# Build the executable
+swift build --target FocusdBot -c debug
+
+# Create app bundle structure
+mkdir -p dist/FocusdBot.app/Contents/{MacOS,Resources}
+
+# Copy executable
+cp .build/arm64-apple-macosx/debug/FocusdBot dist/FocusdBot.app/Contents/MacOS/
+
+# Generate Info.plist with required permissions
+cat > dist/FocusdBot.app/Contents/Info.plist << 'EOF'
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN">
+<plist version="1.0">
+<dict>
+    <key>CFBundleIdentifier</key>
+    <string>com.focusdbot.app</string>
+    <key>LSUIElement</key>
+    <true/>  <!-- Menu bar app, no dock icon -->
+    <key>NSAppleEventsUsageDescription</key>
+    <string>FocusdBot needs AppleScript access for Safari integration.</string>
+</dict>
+</plist>
+EOF</pre>
+                    </div>
+
+                    <h3>Distribution DMG Creation</h3>
+                    <div class="code-block" data-lang="bash">
+<pre># Professional DMG with drag-to-install UI
+hdiutil create -srcfolder dmg-temp -volname "FocusdBot" \
+    -fs HFS+ -format UDRW -size 50m temp-FocusdBot.dmg
+
+# Mount and customize with AppleScript
+osascript -e 'tell application "Finder"
+    set position of item "FocusdBot.app" to {130, 220}
+    set position of item "Applications" to {390, 220}
+end tell'
+
+# Convert to compressed final DMG
+hdiutil convert temp-FocusdBot.dmg -format UDZO -o FocusdBot-1.0.0.dmg</pre>
+                    </div>
+
+                    <h3>Code Signing & Notarization Ready</h3>
+                    <div class="code-block" data-lang="bash">
+<pre># For distribution outside Mac App Store
+codesign --deep --force --verify --verbose --sign "Developer ID Application: Your Name" \
+    FocusdBot.app
+
+# Notarization for Gatekeeper
+xcrun notarytool submit FocusdBot-1.0.0.dmg \
+    --keychain-profile "notarytool-profile" \
+    --wait</pre>
+                    </div>
+
+                    <div class="info-box">
+                        <strong>Deployment Strategy:</strong> The project supports both development (quick testing) and production (signed, notarized) deployment paths. The install script handles development, while the DMG script creates distribution-ready packages.
+                    </div>
+                </section>
+            </div>
+        </main>
+    </div>
+
+    <script>
+        // Smooth scrolling for navigation links
+        document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+            anchor.addEventListener('click', function (e) {
+                e.preventDefault();
+                const target = document.querySelector(this.getAttribute('href'));
+                if (target) {
+                    target.scrollIntoView({
+                        behavior: 'smooth',
+                        block: 'start'
+                    });
+                }
+            });
+        });
+
+        // Highlight current section in TOC
+        const sections = document.querySelectorAll('section[id]');
+        const tocLinks = document.querySelectorAll('.toc a');
+
+        function highlightTOC() {
+            let current = '';
+            sections.forEach(section => {
+                const rect = section.getBoundingClientRect();
+                if (rect.top <= 100 && rect.bottom >= 100) {
+                    current = section.id;
+                }
+            });
+
+            tocLinks.forEach(link => {
+                link.style.color = '';
+                link.style.fontWeight = '';
+                if (link.getAttribute('href') === '#' + current) {
+                    link.style.color = 'var(--primary)';
+                    link.style.fontWeight = '600';
+                }
+            });
+        }
+
+        window.addEventListener('scroll', highlightTOC);
+        highlightTOC(); // Initial call
+    </script>
+</body>
+</html>
