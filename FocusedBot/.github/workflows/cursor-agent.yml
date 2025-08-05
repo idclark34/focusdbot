@@ -3,22 +3,19 @@ name: Cursor Background Agent
 on:
   push:
     branches: [ main ]
-  workflow_dispatch:          # manual trigger
+  workflow_dispatch:
 
 jobs:
   cursor:
     runs-on: ubuntu-latest
-
     steps:
       - uses: actions/checkout@v4
 
-      # Install Cursor CLI
       - name: Install Cursor
         run: |
           curl -fsSL https://raw.githubusercontent.com/getcursor/cursor/main/install.sh | bash
           echo "$HOME/.cursor/bin" >> "$GITHUB_PATH"
 
-      # Run the agent on the repo
       - name: Run Cursor Background Agent
         env:
           CURSOR_API_KEY: ${{ secrets.CURSOR_API_KEY }}

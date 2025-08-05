@@ -1,0 +1,8 @@
+# macOS
+.DS_Store
+
+# Build artifacts
+.build/
+dist/
+dmg-temp/
+
