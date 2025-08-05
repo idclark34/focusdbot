@@ -50,7 +50,7 @@ let package = Package(
             dependencies: [
                 .product(name: "GRDB", package: "GRDB.swift")
             ],
-            sources: ["PhoneWatcher.swift", "BotPanelApp.swift", "Safari.swift", "PlantView.swift", "DashboardWindow.swift", "ReflectionWindow.swift", "Database.swift"],
+            sources: ["PhoneWatcher.swift", "BotPanelApp.swift", "Safari.swift", "PlantView.swift", "DashboardWindow.swift", "ReflectionWindow.swift", "Database.swift", "ActivityMonitor.swift", "MediaWatcher.swift", "AISummary.swift"],
             linkerSettings: [
                 .linkedFramework("AppKit"),
                 .linkedFramework("ApplicationServices"),

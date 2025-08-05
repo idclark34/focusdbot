@@ -71,6 +71,10 @@ class BotModel: ObservableObject {
     private let selfBundle: String = Bundle.main.bundleIdentifier ?? ""
 
     private let phoneWatcher = PhoneWatcher()
+    
+    // New activity and media monitors
+    private let activityMonitor = ActivityMonitor()
+    private let mediaWatcher = MediaWatcher()
 
     // Per-app seconds spent during current focus session
     private var sessionAppSeconds: [String: Int] = [:]
@@ -189,6 +193,10 @@ class BotModel: ObservableObject {
             try s.insert(db)
             return db.lastInsertedRowID
         }
+        
+        // Start monitoring activity and media
+        activityMonitor.startMonitoring()
+        mediaWatcher.startMonitoring()
     }
 
     func setDuration(minutes: Int) {
@@ -387,13 +395,20 @@ class BotModel: ObservableObject {
                     return AppSlice(name: nameFor(b), seconds: sec, color: palette[idx % palette.count])
                 }
 
-            let controller = ReflectionWindowController(model: self, slices: slices)
+            let controller = ReflectionWindowController(model: self, slices: slices, sessionId: self.currentSessionId)
             controller.show()
         }
     }
     
     private func finalizeSession() {
         guard let sessionId = currentSessionId else { return }
+        
+        // Stop monitoring and get buffered events
+        activityMonitor.stopMonitoring()
+        mediaWatcher.stopMonitoring()
+        
+        let activityEvents = activityMonitor.getBufferedEvents()
+        let mediaEvents = mediaWatcher.getBufferedEvents()
         
         try? DB.shared.write { db in
             // Mark session as completed
@@ -407,6 +422,51 @@ class BotModel: ObservableObject {
             for (bundle, seconds) in sessionAppSeconds {
                 var appRecord = SessionApp(id: nil, sessionId: sessionId, bundleId: bundle, seconds: seconds)
                 try appRecord.insert(db)
+            }
+            
+            // Insert buffered activity events
+            for event in activityEvents {
+                var sessionEvent = SessionEvent(
+                    id: nil,
+                    sessionId: sessionId,
+                    tStart: event.timestamp,
+                    tEnd: nil,
+                    kind: event.kind,
+                    title: event.title,
+                    detail: event.detail
+                )
+                try sessionEvent.insert(db)
+            }
+            
+            // Insert buffered media events  
+            for event in mediaEvents {
+                var sessionEvent = SessionEvent(
+                    id: nil,
+                    sessionId: sessionId,
+                    tStart: event.timestamp,
+                    tEnd: nil,
+                    kind: event.kind,
+                    title: event.title,
+                    detail: event.detail
+                )
+                try sessionEvent.insert(db)
+            }
+        }
+        
+        // Clear buffered events after saving
+        activityMonitor.clearBufferedEvents()
+        mediaWatcher.clearBufferedEvents()
+        
+        // Generate AI summary asynchronously
+        if let sessionId = currentSessionId {
+            Task {
+                do {
+                    if let summary = try await AISummary.generate(for: sessionId) {
+                        print("[BotModel] Generated AI summary: \(summary)")
+                    }
+                } catch {
+                    print("[BotModel] Failed to generate AI summary: \(error)")
+                }
             }
         }
     }
