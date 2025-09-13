@@ -393,8 +393,6 @@ struct HistoryTab: View {
         if id == Bundle.main.bundleIdentifier { return "FocusdBot" }
         return NSWorkspace.shared.runningApplications.first(where: { $0.bundleIdentifier == id })?.localizedName ?? id
     }
-<<<<<<< Current (Your changes)
-=======
 }
 
 // MARK: - Recent Reflections View
@@ -525,5 +523,4 @@ struct RecentReflectionsView: View {
             }
         }
     }
->>>>>>> Incoming (Background Agent changes)
 } 
