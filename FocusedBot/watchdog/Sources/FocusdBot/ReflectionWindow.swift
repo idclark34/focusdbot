@@ -11,7 +11,7 @@ struct AppSlice: Identifiable {
 final class ReflectionWindowController {
     private let panel: NSPanel
 
-    init(model: BotModel, slices: [AppSlice]) {
+    init(model: BotModel, slices: [AppSlice], sessionId: Int64?) {
         let size = NSSize(width: 280, height: 360)
         self.panel = NSPanel(contentRect: NSRect(origin: .zero, size: size),
                               styleMask: [.titled, .nonactivatingPanel],
@@ -22,7 +22,7 @@ final class ReflectionWindowController {
         panel.isReleasedWhenClosed = false
         panel.title = "Session Summary"
 
-        let root = ReflectionView(slices: slices) { [weak panel] in
+        let root = ReflectionView(slices: slices, sessionId: sessionId) { [weak panel] in
             panel?.orderOut(nil)
         }.environmentObject(model)
         let host = NSHostingView(rootView: root)
@@ -36,9 +36,14 @@ final class ReflectionWindowController {
 
 struct ReflectionView: View {
     let slices: [AppSlice]
+    let sessionId: Int64?
     let close: () -> Void
     @State private var note: String = ""
+    @State private var aiText: String? = nil
+    @State private var pollTries: Int = 0
+    @State private var noteToken: NSObjectProtocol? = nil
     @EnvironmentObject var model: BotModel
+    private let noteName = Notification.Name.focusdAISummaryReady
 
     var body: some View {
         VStack(spacing: 16) {
@@ -61,6 +66,23 @@ struct ReflectionView: View {
                 .textFieldStyle(.roundedBorder)
                 .padding(.top, 8)
 
+            VStack(alignment: .leading, spacing: 6) {
+                Text("AI Summary").font(.subheadline.bold())
+                if let ai = aiText, !ai.isEmpty {
+                    Text(ai)
+                        .font(.callout)
+                        .foregroundColor(.primary)
+                        .multilineTextAlignment(.leading)
+                        .frame(maxWidth: .infinity, maxHeight: 150, alignment: .leading)
+                        .textSelection(.enabled)
+                } else {
+                    HStack(spacing: 6) {
+                        ProgressView()
+                        Text("Generating…").font(.caption).foregroundColor(.secondary)
+                    }
+                }
+            }
+
             Button("OK") {
                 if !note.trimmingCharacters(in: .whitespaces).isEmpty {
                     model.sessionSummaries.insert(note, at: 0)
@@ -71,6 +93,46 @@ struct ReflectionView: View {
             .buttonStyle(.borderedProminent)
         }
         .padding(20)
+        .onAppear(perform: start)
+        .onDisappear {
+            if let token = noteToken { NotificationCenter.default.removeObserver(token) }
+            noteToken = nil
+        }
+    }
+
+    private func start() {
+        guard let sid = sessionId else { return }
+        // Live update via notification for instant UI
+        noteToken = NotificationCenter.default.addObserver(forName: noteName, object: nil, queue: .main) { note in
+            if let nSid = note.userInfo?["sessionId"] as? Int64, nSid == sid, let text = note.userInfo?["text"] as? String {
+                aiText = text
+                print("[AI] panel received summary via notification len=\(text.count)")
+            }
+        }
+        // Immediate fetch once in case it already exists
+        if let text = try? DB.shared.read({ db in
+            try String.fetchOne(db, sql: "SELECT aiSummary FROM session WHERE id = ?", arguments: [sid])
+        }), !text.isEmpty {
+            aiText = text
+            print("[AI] panel loaded existing summary len=\(text.count)")
+            return
+        }
+        // Fallback polling
+        Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { timer in
+            pollTries += 1
+            if pollTries > 60 { timer.invalidate() }
+            let fetched: String? = try? DB.shared.read { db in
+                try String.fetchOne(db, sql: "SELECT aiSummary FROM session WHERE id = ?", arguments: [sid])
+            }
+            if let text = fetched, !text.isEmpty {
+                aiText = text
+                print("[AI] panel received summary len=\(text.count)")
+                timer.invalidate()
+            } else {
+                // Debug echo while waiting
+                print("[AI] polling aiSummary for session=\(sid) … nil")
+            }
+        }
     }
 }
 

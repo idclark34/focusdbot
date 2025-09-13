@@ -42,11 +42,12 @@ INSTALLATION:
 
 FEATURES:
 • Adorable robot companion in your menu bar
-• Smart distraction detection
+• Smart distraction detection with AI insights
 • Beautiful productivity analytics
-• Pomodoro timer with reflection prompts
+• Pomodoro timer with AI-powered reflection summaries
+• Activity tracking (window titles, media playback)
 • iPhone integration for complete focus tracking
-• Multiple timer display styles
+• Multiple timer display styles and color themes
 
 REQUIREMENTS:
 • macOS 13 (Ventura) or later
