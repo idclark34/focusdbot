@@ -21,6 +21,7 @@
         <a href="#features">Features</a>
         <a href="#pricing">Pricing</a>
         <a href="#faq">FAQ</a>
+        <a class="btn tiny" id="navDownload" href="#">Download</a>
       </nav>
     </div>
   </header>
@@ -28,33 +29,46 @@
   <section class="hero">
     <div class="container hero-inner">
       <div class="hero-copy">
-        <h1>Focus with a friendly companion.</h1>
-        <p>Menu bar Pomodoro timer with distraction detection, website rules, and AI summaries of your work sessions.</p>
+        <div class="badge">New • v1.0.0</div>
+        <h1>
+          Meet your <span class="grad">focus companion</span>.
+        </h1>
+        <p class="lead">A delightful menu bar app that keeps you on track with Pomodoro, distraction awareness, and optional AI summaries.</p>
         <div class="cta">
           <a id="downloadBtn" class="btn primary" href="#">Download for macOS</a>
           <a class="btn ghost" href="#features">See features</a>
         </div>
-        <small class="meta">Signed and notarized. macOS 13+.</small>
+        <small class="meta">Signed + notarized • macOS 13+</small>
+        <div class="trust">
+          <span class="dot"></span> No data leaves your Mac unless you enable AI summaries
+        </div>
       </div>
       <div class="hero-art">
-        <img src="/assets/screenshot.png" alt="App preview" />
+        <div class="glass">
+          <img src="/assets/screenshot.png" alt="App preview" />
+        </div>
+        <div class="orbs">
+          <span style="--i:0"></span>
+          <span style="--i:1"></span>
+          <span style="--i:2"></span>
+        </div>
       </div>
     </div>
   </section>
 
   <section id="features" class="features">
     <div class="container grid-3">
-      <div class="card">
+      <div class="card pop">
         <h3>Pomodoro, refined</h3>
-        <p>Start focused sessions with a single click. Visual feedback and delightful animations keep you engaged.</p>
+        <p>Start sessions with one click. Fluid feedback and micro‑animations keep momentum.</p>
       </div>
-      <div class="card">
+      <div class="card pop delay1">
         <h3>Distraction aware</h3>
-        <p>Detects app and website switches in real time and gently nudges you back on track.</p>
+        <p>Instantly detects app/website switches and nudges you back to what matters.</p>
       </div>
-      <div class="card">
-        <h3>AI session summaries</h3>
-        <p>Optional summaries of what you worked on, powered by your own proxy for privacy.</p>
+      <div class="card pop delay2">
+        <h3>AI summaries</h3>
+        <p>Optional, private by default. Bring your own proxy to generate concise recaps.</p>
       </div>
     </div>
   </section>

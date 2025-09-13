@@ -3,13 +3,15 @@ if (yearEl) yearEl.textContent = new Date().getFullYear();
 
 // Configure download link
 const DMG_URL = 'https://github.com/idclark34/watchdog/releases/download/v1.0.0/FocusdBot-1.0.0.dmg';
-const downloadBtn = document.getElementById('downloadBtn');
-if (downloadBtn) {
-  downloadBtn.href = DMG_URL;
-  downloadBtn.addEventListener('click', () => {
-    fetch('http://localhost:8787/download', { method: 'POST' }).catch(() => {});
+const setDownload = (el) => {
+  if (!el) return;
+  el.href = DMG_URL;
+  el.addEventListener('click', () => {
+    fetch('/download', { method: 'POST' }).catch(() => {});
   });
-}
+};
+setDownload(document.getElementById('downloadBtn'));
+setDownload(document.getElementById('navDownload'));
 
 // Email signup
 const form = document.getElementById('signupForm');
@@ -20,7 +22,7 @@ if (form) {
     const email = document.getElementById('email').value.trim();
     if (!email) return;
     try {
-      const res = await fetch('http://localhost:8787/api/subscribe', {
+      const res = await fetch('/api/subscribe', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email })
