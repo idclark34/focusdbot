@@ -13,3 +13,10 @@ swift run FocusdBot
 ```
 
 Release DMG is built and notarized separately; see the FocusdBot README for details.
+
+## 1.0.0
+- First public notarized release
+- New menu bar UI and animated mascot
+- Activity + media tracking, Safari website rules
+- Optional AI session summaries via proxy
+- Signed & notarized DMG download
