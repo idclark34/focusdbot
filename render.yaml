@@ -1,0 +1,13 @@
+services:
+  - type: web
+    name: focusdbot-api
+    env: node
+    plan: free
+    rootDir: server
+    buildCommand: npm install
+    startCommand: npm start
+    envVars:
+      - key: NODE_VERSION
+        value: 20
+    autoDeploy: true
+
