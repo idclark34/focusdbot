@@ -17,6 +17,12 @@ const repoRoot = join(__dirname, '..');
 const siteDir = join(repoRoot, 'site');
 app.use('/', express.static(siteDir));
 
+// Social preview image: serve repo AppIcon.png as /assets/og.png
+const ogImagePath = join(repoRoot, 'AppIcon.png');
+app.get('/assets/og.png', (_req, res) => {
+  res.sendFile(ogImagePath);
+});
+
 // Simple metrics endpoints
 let downloadCount = 0;
 app.post('/download', (_req, res) => {
