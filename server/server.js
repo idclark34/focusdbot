@@ -9,6 +9,14 @@ app.use(cors());
 app.use(express.json());
 app.use(morgan('tiny'));
 
+// Serve the static marketing site at /
+import { fileURLToPath } from 'node:url';
+import { dirname, join } from 'node:path';
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const repoRoot = join(__dirname, '..');
+const siteDir = join(repoRoot, 'site');
+app.use('/', express.static(siteDir));
+
 // Simple metrics endpoints
 let downloadCount = 0;
 app.post('/download', (_req, res) => {
@@ -19,7 +27,6 @@ app.post('/download', (_req, res) => {
 // Email capture (write to a CSV file locally)
 import { appendFile } from 'node:fs';
 import { existsSync, mkdirSync } from 'node:fs';
-import { join } from 'node:path';
 const dataDir = join(process.cwd(), 'data');
 if (!existsSync(dataDir)) mkdirSync(dataDir, { recursive: true });
 const csvPath = join(dataDir, 'signups.csv');
