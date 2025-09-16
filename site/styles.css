@@ -64,5 +64,10 @@ body { margin:0; font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto,
   .btn.tiny{ padding:8px 12px; border-radius:10px; }
 }
 
+/* Hide download CTAs on non-macOS devices */
+@media (pointer:coarse), (max-width: 640px){
+  .download-cta{ display:none !important; }
+}
+
 /* Ensure images don’t overflow on iOS */
 img{ max-width:100%; height:auto; }

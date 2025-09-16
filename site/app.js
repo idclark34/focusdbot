@@ -7,6 +7,13 @@ const API_BASE = window.API_BASE || '';
 const setDownload = (el) => {
   if (!el) return;
   el.href = DMG_URL;
+  // Hide download links for non-macOS user agents as a hard guard
+  const ua = navigator.userAgent || '';
+  const isMac = /Macintosh|Mac OS X|Macintosh;/.test(ua);
+  if (!isMac) {
+    el.style.display = 'none';
+    return;
+  }
   el.addEventListener('click', () => {
     const url = API_BASE ? `${API_BASE}/download` : '/download';
     fetch(url, { method: 'POST' }).catch(() => {});
