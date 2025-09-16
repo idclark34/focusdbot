@@ -15,7 +15,9 @@ import { dirname, join } from 'node:path';
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const repoRoot = join(__dirname, '..');
 const siteDir = join(repoRoot, 'site');
-app.use('/', express.static(siteDir));
+const publicDir = join(__dirname, 'public');
+const staticRoot = existsSync(siteDir) ? siteDir : publicDir;
+app.use('/', express.static(staticRoot));
 
 // Social preview image: serve repo AppIcon.png as /assets/og.png
 const ogImagePath = join(repoRoot, 'AppIcon.png');
