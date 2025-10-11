@@ -2,7 +2,7 @@ const yearEl = document.getElementById('year');
 if (yearEl) yearEl.textContent = new Date().getFullYear();
 
 // Configure download link
-const ZIP_URL = '/dist/FocusdBot-Simple-1.0.0.zip';
+const ZIP_URL = 'dist/FocusdBot-Simple-1.0.0.zip';
 const API_BASE = window.API_BASE || '';
 const setDownload = (el) => {
   if (!el) return;
