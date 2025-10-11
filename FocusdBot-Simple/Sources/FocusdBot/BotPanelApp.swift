@@ -369,8 +369,8 @@ class BotModel: ObservableObject {
 
         var reallyAllowed = allowed
 
-        // Check website rules for Safari
-        if currentBundle == "com.apple.Safari" {
+        // Check website rules for Safari ONLY if Safari is not already allowed as an app.
+        if currentBundle == "com.apple.Safari" && !allowed {
             if let url = Safari.frontmostTabURL(), let host = url.host {
                 let isWebsiteAllowed = webRules.contains { $0.enabled && host.hasSuffix($0.domain) }
                 reallyAllowed = isWebsiteAllowed
