@@ -2,11 +2,11 @@ const yearEl = document.getElementById('year');
 if (yearEl) yearEl.textContent = new Date().getFullYear();
 
 // Configure download link
-const DMG_URL = 'https://github.com/idclark34/watchdog/releases/download/v1.0.0/FocusdBot-1.0.0.dmg';
+const ZIP_URL = '/dist/FocusdBot-Simple-1.0.0.zip';
 const API_BASE = window.API_BASE || '';
 const setDownload = (el) => {
   if (!el) return;
-  el.href = DMG_URL;
+  el.href = ZIP_URL;
   // Hide download links for non-macOS user agents as a hard guard
   const ua = navigator.userAgent || '';
   const isMac = /Macintosh|Mac OS X|Macintosh;/.test(ua);

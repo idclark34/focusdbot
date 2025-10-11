@@ -49,6 +49,7 @@ private func activeWindowInfo() -> (bundle: String, title: String) {
 }
 
 // MARK: - ViewModel (lightweight)
+@MainActor
 class BotModel: ObservableObject {
     enum PomodoroState { case idle, running, success, breakTime, distracted }
 
@@ -138,20 +139,25 @@ class BotModel: ObservableObject {
         didSet { UserDefaults.standard.set(characterStyle.rawValue, forKey: "botCharacterStyle") }
     }
 
-    private var timer: Timer?
+    // Minimize to menu bar preference
+    @Published var isMinimized: Bool = UserDefaults.standard.bool(forKey: "botIsMinimized") {
+        didSet { 
+            UserDefaults.standard.set(isMinimized, forKey: "botIsMinimized")
+            // Notify the panel controller to show/hide
+            NotificationCenter.default.post(name: .botMinimizeToggled, object: nil)
+        }
+    }
+
+    // Single high-accuracy timer source for all ticks/animations
+    private var tickTimer: DispatchSourceTimer?
+    private let timerQueue = DispatchQueue(label: "com.focusdbot.timer", qos: .userInitiated)
+    private var subTick: Int = 0 // used for simple pulse/blink cadence
     private var activationObserver: Any?
 
     init() {
-        // main tick (1-sec)
+        // main tick using DispatchSourceTimer to avoid drift
         loadWebRules()
-        timer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
-            self?.tick()
-        }
-
-        // pulse timer (0.35-sec)
-        _ = Timer.scheduledTimer(withTimeInterval: 0.35, repeats: true) { [weak self] _ in
-            self?.pulse.toggle()
-        }
+        startAccurateTimer()
 
         // App activation observer for instant reaction
         activationObserver = NSWorkspace.shared.notificationCenter.addObserver(forName: NSWorkspace.didActivateApplicationNotification, object: nil, queue: .main) { [weak self] note in
@@ -173,11 +179,38 @@ class BotModel: ObservableObject {
     }
 
     deinit {
+        stopAccurateTimer()
         if let obs = activationObserver {
             NSWorkspace.shared.notificationCenter.removeObserver(obs)
         }
     }
 
+    // MARK: - Accurate timer management
+    private func startAccurateTimer() {
+        stopAccurateTimer()
+        let t = DispatchSource.makeTimerSource(queue: timerQueue)
+        // 1 second cadence with tolerance
+        t.schedule(deadline: .now() + 1.0, repeating: 1.0, leeway: .milliseconds(50))
+        t.setEventHandler { [weak self] in
+            guard let self = self else { return }
+            DispatchQueue.main.async {
+                self.subTick = (self.subTick + 1) % 6
+                // simple pulse every ~0.5-1.0s without extra timers
+                if self.subTick % 2 == 0 { self.pulse.toggle() }
+                self.tick()
+            }
+        }
+        t.resume()
+        tickTimer = t
+    }
+
+    private func stopAccurateTimer() {
+        tickTimer?.setEventHandler {}
+        tickTimer?.cancel()
+        tickTimer = nil
+    }
+
+    // MARK: - Intents
     func startPomodoro() {
         let current = activeWindowInfo().bundle
         sessionAllowedBundles = [current]
@@ -197,6 +230,22 @@ class BotModel: ObservableObject {
         // Start monitoring activity and media
         activityMonitor.startMonitoring()
         mediaWatcher.startMonitoring()
+    }
+
+    func pauseSession() {
+        guard pomodoroState == .running || pomodoroState == .distracted || pomodoroState == .breakTime else { return }
+        pomodoroState = .idle
+        currentSessionId = nil
+        activityMonitor.stopMonitoring()
+        mediaWatcher.stopMonitoring()
+        clearPersistedSession()
+    }
+
+    func finishSession() {
+        finalizeSession()
+        pomodoroState = .idle
+        currentSessionId = nil
+        clearPersistedSession()
     }
 
     func setDuration(minutes: Int) {
@@ -228,6 +277,10 @@ class BotModel: ObservableObject {
 
     func setCharacterStyle(_ style: CharacterStyle) {
         characterStyle = style
+    }
+
+    func toggleMinimize() {
+        isMinimized.toggle()
     }
 
     private func tick() {
@@ -323,6 +376,35 @@ class BotModel: ObservableObject {
         default:
             break
         }
+
+        persistInFlightIfNeeded()
+    }
+
+    // MARK: - Persistence of in-flight session (robust restarts)
+    private var persistCounter: Int = 0
+    private let persistEverySeconds: Int = 5
+
+    private func persistInFlightIfNeeded() {
+        persistCounter += 1
+        guard persistCounter % persistEverySeconds == 0 else { return }
+        let defaults = UserDefaults.standard
+        let active = pomodoroState == .running || pomodoroState == .distracted || pomodoroState == .breakTime
+        defaults.set(active, forKey: "bot_sessionActive")
+        if active {
+            defaults.set(remaining, forKey: "bot_sessionRemaining")
+            defaults.set(durationMinutes, forKey: "bot_sessionPlannedMinutes")
+            defaults.set(currentSessionId, forKey: "bot_sessionId")
+        } else {
+            clearPersistedSession()
+        }
+    }
+
+    private func clearPersistedSession() {
+        let d = UserDefaults.standard
+        d.removeObject(forKey: "bot_sessionActive")
+        d.removeObject(forKey: "bot_sessionRemaining")
+        d.removeObject(forKey: "bot_sessionPlannedMinutes")
+        d.removeObject(forKey: "bot_sessionId")
     }
 
     // MARK: Website Permissions (rules)
@@ -728,6 +810,7 @@ struct GradientText: View {
 final class BotPanelController {
     private var panel: NSPanel!
     private let model: BotModel
+    private var minimizeObserver: NSObjectProtocol?
 
     init(model: BotModel) {
         self.model = model
@@ -751,11 +834,45 @@ final class BotPanelController {
         let hosting = NSHostingView(rootView: RobotView().environmentObject(model))
         hosting.frame = NSRect(origin: .zero, size: NSSize(width: sizeDim, height: sizeDim))
         panel.contentView = hosting
-        print("[Bot] Panel constructed and ordering front…")
-        panel.makeKeyAndOrderFront(nil)
-        panel.orderFrontRegardless()
-
-        // no scale observation
+        
+        // Set initial visibility based on minimize state
+        Task { @MainActor in
+            if model.isMinimized {
+                panel.orderOut(nil)
+            } else {
+                panel.makeKeyAndOrderFront(nil)
+                panel.orderFrontRegardless()
+            }
+        }
+        
+        // Listen for minimize toggle notifications
+        minimizeObserver = NotificationCenter.default.addObserver(
+            forName: .botMinimizeToggled,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor in
+                self?.updateVisibility()
+            }
+        }
+        
+        print("[Bot] Panel constructed")
+    }
+    
+    deinit {
+        if let observer = minimizeObserver {
+            NotificationCenter.default.removeObserver(observer)
+        }
+    }
+    
+    @MainActor
+    private func updateVisibility() {
+        if model.isMinimized {
+            panel.orderOut(nil)
+        } else {
+            panel.makeKeyAndOrderFront(nil)
+            panel.orderFrontRegardless()
+        }
     }
 }
 
@@ -928,6 +1045,12 @@ struct BotMenuView: View {
                 Divider()
                 Button("Open Dashboard", action: { model.showDashboard() })
                     .padding(.vertical, 4)
+                
+                Button(model.isMinimized ? "Show Robot" : "Hide Robot") {
+                    model.toggleMinimize()
+                }
+                .padding(.vertical, 4)
+                
                 Divider()
                 Button("Quit") { NSApplication.shared.terminate(nil) }
                     .foregroundColor(.red)
@@ -969,11 +1092,19 @@ struct BotPanelApp: App {
     }
 
     var body: some Scene {
-        MenuBarExtra("FocusdBot", systemImage: "brain.head.profile") {
+        MenuBarExtra(menuBarTitle, systemImage: "brain.head.profile") {
             BotMenuView()
                 .environmentObject(model)
         }
         .menuBarExtraStyle(.window)
+    }
+    
+    private var menuBarTitle: String {
+        if model.isMinimized && (model.pomodoroState == .running || model.pomodoroState == .distracted) {
+            return formatTime(model.remaining)
+        } else {
+            return "FocusdBot"
+        }
     }
 }
 
@@ -983,6 +1114,18 @@ extension Int {
 
 extension Double {
     fileprivate func nonZeroOrDefault(_ def: Double) -> Double { self == 0 ? def : self }
+}
+
+// Helper function to format time
+private func formatTime(_ seconds: Int) -> String {
+    let minutes = seconds / 60
+    let remainingSeconds = seconds % 60
+    return String(format: "%d:%02d", minutes, remainingSeconds)
+}
+
+// MARK: - Notification names
+extension Notification.Name {
+    static let botMinimizeToggled = Notification.Name("botMinimizeToggled")
 }
 
 // App delegate to run as accessory (no dock icon) and keep alive

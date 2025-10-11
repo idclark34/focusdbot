@@ -1,0 +1,16 @@
+{
+  "name": "focusdbot-proxy",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev",
+    "publish": "wrangler publish"
+  },
+  "devDependencies": {
+    "wrangler": "^3.74.0",
+    "@cloudflare/workers-types": "^4.20240512.0"
+  }
+}
+
+
