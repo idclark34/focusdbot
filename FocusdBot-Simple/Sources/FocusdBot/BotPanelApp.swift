@@ -923,8 +923,8 @@ struct RobotView: View {
                     .animation(.easeInOut(duration: model.pomodoroState == .distracted ? 0.22 : 0.6), value: model.pulse)
                     .animation(.easeInOut(duration: 0.8), value: model.blink)
 
-                // Timer display at bottom
-                if model.pomodoroState == .running || model.pomodoroState == .distracted {
+                // Timer display at bottom (hidden when distracted/angry)
+                if model.pomodoroState == .running {
                     VStack {
                         Spacer()
                         simpleTimerView(
