@@ -16,6 +16,28 @@ rm -rf "${BUNDLE_DIR}"
 mkdir -p "${MACOS_DIR}"
 mkdir -p "${RESOURCES_DIR}"
 
+# Optionally include an app icon if provided
+# Drop either AppIcon.icns or AppIcon.png in the FocusdBot-Simple/ folder.
+# If a PNG is provided, this will generate an .icns for you.
+ICON_NAME="AppIcon"
+ICON_PNG="AppIcon.png"
+ICON_ICNS="AppIcon.icns"
+
+if [ -f "${ICON_ICNS}" ]; then
+  echo "Including existing ${ICON_ICNS}..."
+  cp "${ICON_ICNS}" "${RESOURCES_DIR}/${ICON_NAME}.icns"
+elif [ -f "${ICON_PNG}" ]; then
+  echo "Generating ${ICON_NAME}.icns from ${ICON_PNG}..."
+  TMP_ICONSET="$(mktemp -d)/Icon.iconset"
+  mkdir -p "${TMP_ICONSET}"
+  for SZ in 16 32 128 256 512; do
+    sips -z ${SZ} ${SZ} "${ICON_PNG}" --out "${TMP_ICONSET}/icon_${SZ}x${SZ}.png" >/dev/null
+    sips -z $((SZ*2)) $((SZ*2)) "${ICON_PNG}" --out "${TMP_ICONSET}/icon_${SZ}x${SZ}@2x.png" >/dev/null
+  done
+  iconutil -c icns "${TMP_ICONSET}" -o "${RESOURCES_DIR}/${ICON_NAME}.icns"
+  rm -rf "${TMP_ICONSET%/Icon.iconset}"
+fi
+
 # Copy the executable
 echo "Copying executable..."
 cp ".build/release/FocusdBot" "${MACOS_DIR}/${APP_NAME}"
@@ -35,6 +57,7 @@ cat > "${CONTENTS_DIR}/Info.plist" << EOF
     <string>FocusdBot Simple</string>
     <key>CFBundleDisplayName</key>
     <string>FocusdBot Simple</string>
+$( if [ -f "${RESOURCES_DIR}/${ICON_NAME}.icns" ]; then printf "    <key>CFBundleIconFile</key>\n    <string>%s</string>\n" "${ICON_NAME}"; fi )
     <key>CFBundleVersion</key>
     <string>1.0.0</string>
     <key>CFBundleShortVersionString</key>
