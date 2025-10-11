@@ -288,11 +288,17 @@ class BotModel: ObservableObject {
     private func loadWebRules() {
         if let data = UserDefaults.standard.data(forKey: webRuleKey),
            let rules = try? JSONDecoder().decode([WebRule].self, from: data) {
-            self.webRules = rules
+            // sanitize any previously-saved domains (strip scheme, path, www.)
+            self.webRules = rules.map { r in
+                WebRule(domain: sanitizeDomainInput(r.domain) ?? r.domain.lowercased(), enabled: r.enabled)
+            }
+            saveWebRules()
         } else {
             // migrate old key if exists
             if let old = UserDefaults.standard.stringArray(forKey: "botAllowedWebsites") {
-                self.webRules = old.map { WebRule(domain: $0, enabled: true) }
+                self.webRules = old.compactMap { d in
+                    sanitizeDomainInput(d).map { WebRule(domain: $0, enabled: true) }
+                }
                 saveWebRules()
                 UserDefaults.standard.removeObject(forKey: "botAllowedWebsites")
             }
@@ -306,7 +312,7 @@ class BotModel: ObservableObject {
     }
 
     func addWebsiteRule(_ domain: String) {
-        let cleaned = domain.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        let cleaned = sanitizeDomainInput(domain) ?? domain.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         guard !cleaned.isEmpty else { return }
         if let idx = webRules.firstIndex(where: { $0.domain == cleaned }) {
             webRules[idx].enabled = true
@@ -371,13 +377,42 @@ class BotModel: ObservableObject {
 
         // Check website rules for Safari ONLY if Safari is not already allowed as an app.
         if currentBundle == "com.apple.Safari" && !allowed {
-            if let url = Safari.frontmostTabURL(), let host = url.host {
-                let isWebsiteAllowed = webRules.contains { $0.enabled && host.hasSuffix($0.domain) }
+            if let url = Safari.frontmostTabURL(), let h = url.host?.lowercased() {
+                let host = h.hasPrefix("www.") ? String(h.dropFirst(4)) : h
+                let isWebsiteAllowed = webRules.contains { rule in
+                    guard rule.enabled else { return false }
+                    let d = rule.domain
+                    return host == d || host.hasSuffix("." + d)
+                }
                 reallyAllowed = isWebsiteAllowed
             } else {
                 reallyAllowed = false // No URL, probably a new tab page
             }
         }
+
+    // Sanitize input like "https://www.youtube.com/watch?v=.." to "youtube.com"
+    private func sanitizeDomainInput(_ input: String) -> String? {
+        let trimmed = input.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.isEmpty { return nil }
+        // Try URL parsing first
+        if let url = URL(string: trimmed), let host = url.host {
+            return normalizeHost(host)
+        }
+        // If it doesn't parse as URL, try adding a scheme and reparse
+        if let url = URL(string: "https://" + trimmed), let host = url.host {
+            return normalizeHost(host)
+        }
+        // Fallback: strip any path and www.
+        let lower = trimmed.lowercased()
+        let base = lower.split(separator: "/", maxSplits: 1).first.map(String.init) ?? lower
+        return normalizeHost(base)
+    }
+
+    private func normalizeHost(_ host: String) -> String {
+        let lower = host.lowercased()
+        if lower.hasPrefix("www.") { return String(lower.dropFirst(4)) }
+        return lower
+    }
 
         switch pomodoroState {
         case .running:
