@@ -6,6 +6,8 @@ swift build -c release
 
 # Create app bundle structure
 APP_NAME="FocusdBot-Simple"
+# Bump VERSION to force icon cache refresh when distributing
+VERSION=${VERSION:-"1.0.1"}
 BUNDLE_DIR="dist/${APP_NAME}.app"
 CONTENTS_DIR="${BUNDLE_DIR}/Contents"
 MACOS_DIR="${CONTENTS_DIR}/MacOS"
@@ -59,9 +61,9 @@ cat > "${CONTENTS_DIR}/Info.plist" << EOF
     <string>FocusdBot Simple</string>
 $( if [ -f "${RESOURCES_DIR}/${ICON_NAME}.icns" ]; then printf "    <key>CFBundleIconFile</key>\n    <string>%s</string>\n" "${ICON_NAME}"; fi )
     <key>CFBundleVersion</key>
-    <string>1.0.0</string>
+    <string>${VERSION}</string>
     <key>CFBundleShortVersionString</key>
-    <string>1.0.0</string>
+    <string>${VERSION}</string>
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>CFBundleSignature</key>
@@ -87,8 +89,8 @@ echo "📦 Size: $(du -sh "${BUNDLE_DIR}" | cut -f1)"
 # Create ZIP for distribution
 echo "Creating ZIP for distribution..."
 cd dist
-zip -r "${APP_NAME}-1.0.0.zip" "${APP_NAME}.app"
+zip -r "${APP_NAME}-${VERSION}.zip" "${APP_NAME}.app"
 cd ..
 
-echo "✅ Distribution ZIP created: dist/${APP_NAME}-1.0.0.zip"
-echo "📦 ZIP Size: $(du -sh "dist/${APP_NAME}-1.0.0.zip" | cut -f1)"
+echo "✅ Distribution ZIP created: dist/${APP_NAME}-${VERSION}.zip"
+echo "📦 ZIP Size: $(du -sh "dist/${APP_NAME}-${VERSION}.zip" | cut -f1)"
