@@ -412,7 +412,7 @@ class BotModel: ObservableObject {
         let lower = host.lowercased()
         if lower.hasPrefix("www.") { return String(lower.dropFirst(4)) }
         return lower
-    }
+        }
 
         switch pomodoroState {
         case .running:
@@ -471,6 +471,30 @@ class BotModel: ObservableObject {
         if !activeNow {
             Task { @MainActor in StatusBarTimer.shared.update(text: nil) }
         }
+    }
+
+    // Sanitize input like "https://www.youtube.com/watch?v=.." to "youtube.com"
+    private func sanitizeDomainInput(_ input: String) -> String? {
+        let trimmed = input.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.isEmpty { return nil }
+        // Try URL parsing first
+        if let url = URL(string: trimmed), let host = url.host {
+            return normalizeHost(host)
+        }
+        // If it doesn't parse as URL, try adding a scheme and reparse
+        if let url = URL(string: "https://" + trimmed), let host = url.host {
+            return normalizeHost(host)
+        }
+        // Fallback: strip any path and www.
+        let lower = trimmed.lowercased()
+        let base = lower.split(separator: "/", maxSplits: 1).first.map(String.init) ?? lower
+        return normalizeHost(base)
+    }
+
+    private func normalizeHost(_ host: String) -> String {
+        let lower = host.lowercased()
+        if lower.hasPrefix("www.") { return String(lower.dropFirst(4)) }
+        return lower
     }
 
     // MARK: - Persistence of in-flight session (robust restarts)
