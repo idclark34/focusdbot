@@ -284,6 +284,9 @@ class BotModel: ObservableObject {
 
     // MARK: - Website Management
     private let webRuleKey = "botWebRules"
+    // Cache last known Safari host allow result to avoid transient AppleScript failures
+    private var lastSafariHost: String? = nil
+    private var lastSafariAllowed: Bool = false
 
     private func loadWebRules() {
         if let data = UserDefaults.standard.data(forKey: webRuleKey),
@@ -384,9 +387,12 @@ class BotModel: ObservableObject {
                     let d = rule.domain
                     return host == d || host.hasSuffix("." + d)
                 }
+                lastSafariHost = host
+                lastSafariAllowed = isWebsiteAllowed
                 reallyAllowed = isWebsiteAllowed
             } else {
-                reallyAllowed = false // No URL, probably a new tab page
+                // If Safari URL unavailable this tick, fall back to last known result
+                reallyAllowed = lastSafariAllowed
             }
         }
 
