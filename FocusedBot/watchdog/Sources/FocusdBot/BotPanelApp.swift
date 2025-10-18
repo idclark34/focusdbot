@@ -3,73 +3,6 @@ import AppKit
 import ApplicationServices
 
 // MARK: - Clock style options
-enum ColorTheme: String, CaseIterable, Identifiable, Codable {
-    case ocean
-    case sunset
-    case forest
-    case vapor
-    case mono
-    case rainbow
-
-    var id: String { rawValue }
-
-    var displayName: String {
-        switch self {
-        case .ocean: return "Ocean"
-        case .sunset: return "Sunset"
-        case .forest: return "Forest"
-        case .vapor: return "Vapor"
-        case .mono: return "Mono"
-        case .rainbow: return "Rainbow"
-        }
-    }
-
-    var shortName: String {
-        switch self {
-        case .ocean: return "Ocean"
-        case .sunset: return "Sun"
-        case .forest: return "Forest"
-        case .vapor: return "Vapor"
-        case .mono: return "Mono"
-        case .rainbow: return "All"
-        }
-    }
-
-    var saturation: Double { self == .mono ? 0.0 : 0.85 }
-    var brightness: Double { self == .mono ? 0.92 : 0.95 }
-
-    private var hueStops: [Double] {
-        switch self {
-        case .ocean:  return [0.47, 0.55, 0.62, 0.70]                 // teal → blue → indigo
-        case .sunset: return [0.95, 0.02, 0.06, 0.10]                  // magenta → red → orange → amber (wraps)
-        case .forest: return [0.24, 0.28, 0.32, 0.36]                  // greens
-        case .vapor:  return [0.78, 0.85, 0.58, 0.50]                  // magenta → pink → cyan → teal
-        case .mono:   return [0.00, 0.00]                              // unused
-        case .rainbow:return [0.00, 0.12, 0.25, 0.38, 0.50, 0.62, 0.75, 0.88, 1.00]
-        }
-    }
-
-    func hue(for tRaw: Double) -> Double {
-        // Interpolate across themed hue stops with circular wrap-around.
-        let t0 = (tRaw.truncatingRemainder(dividingBy: 1.0) + 1).truncatingRemainder(dividingBy: 1.0)
-        let stops = hueStops
-        guard let _ = stops.first, stops.count > 1 else { return stops.first ?? 0.0 }
-        let scaled = t0 * Double(stops.count)
-        let i = Int(floor(scaled)) % stops.count
-        let f = scaled - floor(scaled)
-        let a = stops[i]
-        let b = stops[(i + 1) % stops.count]
-        var delta = b - a
-        if delta > 0.5 { delta -= 1.0 } else if delta < -0.5 { delta += 1.0 }
-        let h = a + delta * f
-        return (h.truncatingRemainder(dividingBy: 1.0) + 1).truncatingRemainder(dividingBy: 1.0)
-    }
-}
-
-extension Notification.Name {
-    static let focusdAISummaryReady = Notification.Name("focusd.ai.summary.ready")
-}
-
 enum ClockStyle: String, CaseIterable, Identifiable, Codable {
     case numeric
     case gradient
@@ -82,15 +15,6 @@ enum ClockStyle: String, CaseIterable, Identifiable, Codable {
         switch self {
         case .numeric: return "Numeric"
         case .gradient: return "Gradient"
-        case .neon: return "Neon"
-        case .dotMatrix: return "Dots"
-        }
-    }
-
-    var shortName: String {
-        switch self {
-        case .numeric: return "Num"
-        case .gradient: return "Grad"
         case .neon: return "Neon"
         case .dotMatrix: return "Dots"
         }
@@ -125,6 +49,7 @@ private func activeWindowInfo() -> (bundle: String, title: String) {
 }
 
 // MARK: - ViewModel (lightweight)
+@MainActor
 class BotModel: ObservableObject {
     enum PomodoroState { case idle, running, success, breakTime, distracted }
 
@@ -147,6 +72,8 @@ class BotModel: ObservableObject {
     private let selfBundle: String = Bundle.main.bundleIdentifier ?? ""
 
     private let phoneWatcher = PhoneWatcher()
+    
+    // New activity and media monitors
     private let activityMonitor = ActivityMonitor()
     private let mediaWatcher = MediaWatcher()
 
@@ -171,9 +98,6 @@ class BotModel: ObservableObject {
 
     // Color cycle hue (avoids red)
     @Published var bodyHue: Double = 0.05
-    @Published var colorTheme: ColorTheme = ColorTheme(rawValue: UserDefaults.standard.string(forKey: "botColorTheme") ?? ColorTheme.ocean.rawValue) ?? .ocean {
-        didSet { UserDefaults.standard.set(colorTheme.rawValue, forKey: "botColorTheme") }
-    }
 
     // ==== Daily stats ====
     @Published var completedToday: Int = 0
@@ -215,20 +139,25 @@ class BotModel: ObservableObject {
         didSet { UserDefaults.standard.set(characterStyle.rawValue, forKey: "botCharacterStyle") }
     }
 
-    private var timer: Timer?
+    // Minimize to menu bar preference
+    @Published var isMinimized: Bool = UserDefaults.standard.bool(forKey: "botIsMinimized") {
+        didSet { 
+            UserDefaults.standard.set(isMinimized, forKey: "botIsMinimized")
+            // Notify the panel controller to show/hide
+            NotificationCenter.default.post(name: .botMinimizeToggled, object: nil)
+        }
+    }
+
+    // Single high-accuracy timer source for all ticks/animations
+    private var tickTimer: DispatchSourceTimer?
+    private let timerQueue = DispatchQueue(label: "com.focusdbot.timer", qos: .userInitiated)
+    private var subTick: Int = 0 // used for simple pulse/blink cadence
     private var activationObserver: Any?
 
     init() {
-        // main tick (1-sec)
+        // main tick using DispatchSourceTimer to avoid drift
         loadWebRules()
-        timer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
-            self?.tick()
-        }
-
-        // pulse timer (0.35-sec)
-        _ = Timer.scheduledTimer(withTimeInterval: 0.35, repeats: true) { [weak self] _ in
-            self?.pulse.toggle()
-        }
+        startAccurateTimer()
 
         // App activation observer for instant reaction
         activationObserver = NSWorkspace.shared.notificationCenter.addObserver(forName: NSWorkspace.didActivateApplicationNotification, object: nil, queue: .main) { [weak self] note in
@@ -250,29 +179,39 @@ class BotModel: ObservableObject {
     }
 
     deinit {
+        stopAccurateTimer()
         if let obs = activationObserver {
             NSWorkspace.shared.notificationCenter.removeObserver(obs)
         }
     }
 
-    func startPomodoro() {
-        // Check accessibility permissions before starting
-        if !ActivityMonitor.checkAccessibilityPermission() {
+    // MARK: - Accurate timer management
+    private func startAccurateTimer() {
+        stopAccurateTimer()
+        let t = DispatchSource.makeTimerSource(queue: timerQueue)
+        // 1 second cadence with tolerance
+        t.schedule(deadline: .now() + 1.0, repeating: 1.0, leeway: .milliseconds(50))
+        t.setEventHandler { [weak self] in
+            guard let self = self else { return }
             DispatchQueue.main.async {
-                let alert = NSAlert()
-                alert.messageText = "Accessibility Permission Required"
-                alert.informativeText = "FocusdBot needs Accessibility permission to track your activity and provide AI insights. Please grant permission in System Preferences > Security & Privacy > Privacy > Accessibility."
-                alert.addButton(withTitle: "Open System Preferences")
-                alert.addButton(withTitle: "Continue Without Permission")
-                alert.alertStyle = .informational
-                
-                let response = alert.runModal()
-                if response == .alertFirstButtonReturn {
-                    NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")!)
-                }
+                self.subTick = (self.subTick + 1) % 6
+                // simple pulse every ~0.5-1.0s without extra timers
+                if self.subTick % 2 == 0 { self.pulse.toggle() }
+                self.tick()
             }
         }
-        
+        t.resume()
+        tickTimer = t
+    }
+
+    private func stopAccurateTimer() {
+        tickTimer?.setEventHandler {}
+        tickTimer?.cancel()
+        tickTimer = nil
+    }
+
+    // MARK: - Intents
+    func startPomodoro() {
         let current = activeWindowInfo().bundle
         sessionAllowedBundles = [current]
         remaining = pomodoroTotal
@@ -281,18 +220,32 @@ class BotModel: ObservableObject {
 
         sessionAppSeconds = [:]
 
-        // Start monitors for AI/session events
-        activityMonitor.clearBufferedEvents()
-        mediaWatcher.clearBufferedEvents()
-        activityMonitor.startMonitoring()
-        mediaWatcher.startMonitoring()
-
         // insert session row
         currentSessionId = try? DB.shared.write { db in
             var s = Session(id: nil, start: Date(), end: nil, type: "work", plannedMinutes: durationMinutes, completed: false)
             try s.insert(db)
             return db.lastInsertedRowID
         }
+        
+        // Start monitoring activity and media
+        activityMonitor.startMonitoring()
+        mediaWatcher.startMonitoring()
+    }
+
+    func pauseSession() {
+        guard pomodoroState == .running || pomodoroState == .distracted || pomodoroState == .breakTime else { return }
+        pomodoroState = .idle
+        currentSessionId = nil
+        activityMonitor.stopMonitoring()
+        mediaWatcher.stopMonitoring()
+        clearPersistedSession()
+    }
+
+    func finishSession() {
+        finalizeSession()
+        pomodoroState = .idle
+        currentSessionId = nil
+        clearPersistedSession()
     }
 
     func setDuration(minutes: Int) {
@@ -326,6 +279,10 @@ class BotModel: ObservableObject {
         characterStyle = style
     }
 
+    func toggleMinimize() {
+        isMinimized.toggle()
+    }
+
     private func tick() {
         // ==== Daily rollover check ====
         if !Calendar.current.isDate(statsDate, inSameDayAs: Date()) {
@@ -340,8 +297,9 @@ class BotModel: ObservableObject {
         blink.toggle()
         flipCount += 1
 
-        // advance body hue for color cycling (0..1)
-        bodyHue = (bodyHue + 0.01).truncatingRemainder(dividingBy: 1.0)
+        // advance body hue for color cycling
+        bodyHue += 0.01
+        if bodyHue > 0.95 { bodyHue = 0.05 } // wrap to skip red zone
 
         // random wiggle every few seconds
         if Int.random(in: 0...3) == 0 { // 25% chance each second
@@ -418,6 +376,35 @@ class BotModel: ObservableObject {
         default:
             break
         }
+
+        persistInFlightIfNeeded()
+    }
+
+    // MARK: - Persistence of in-flight session (robust restarts)
+    private var persistCounter: Int = 0
+    private let persistEverySeconds: Int = 5
+
+    private func persistInFlightIfNeeded() {
+        persistCounter += 1
+        guard persistCounter % persistEverySeconds == 0 else { return }
+        let defaults = UserDefaults.standard
+        let active = pomodoroState == .running || pomodoroState == .distracted || pomodoroState == .breakTime
+        defaults.set(active, forKey: "bot_sessionActive")
+        if active {
+            defaults.set(remaining, forKey: "bot_sessionRemaining")
+            defaults.set(durationMinutes, forKey: "bot_sessionPlannedMinutes")
+            defaults.set(currentSessionId, forKey: "bot_sessionId")
+        } else {
+            clearPersistedSession()
+        }
+    }
+
+    private func clearPersistedSession() {
+        let d = UserDefaults.standard
+        d.removeObject(forKey: "bot_sessionActive")
+        d.removeObject(forKey: "bot_sessionRemaining")
+        d.removeObject(forKey: "bot_sessionPlannedMinutes")
+        d.removeObject(forKey: "bot_sessionId")
     }
 
     // MARK: Website Permissions (rules)
@@ -497,12 +484,14 @@ class BotModel: ObservableObject {
     
     private func finalizeSession() {
         guard let sessionId = currentSessionId else { return }
-        print("[AI] finalizeSession sessionId=\(sessionId)")
-        // Stop monitors and capture buffered events
+        
+        // Stop monitoring and get buffered events
         activityMonitor.stopMonitoring()
         mediaWatcher.stopMonitoring()
-        let buffered = (activityMonitor.getBufferedEvents() + mediaWatcher.getBufferedEvents()).sorted { $0.timestamp < $1.timestamp }
-
+        
+        let activityEvents = activityMonitor.getBufferedEvents()
+        let mediaEvents = mediaWatcher.getBufferedEvents()
+        
         try? DB.shared.write { db in
             // Mark session as completed
             try db.execute(sql: """
@@ -516,27 +505,50 @@ class BotModel: ObservableObject {
                 var appRecord = SessionApp(id: nil, sessionId: sessionId, bundleId: bundle, seconds: seconds)
                 try appRecord.insert(db)
             }
-
-            // Insert buffered session events
-            for ev in buffered {
-                var e = SessionEvent(id: nil, sessionId: sessionId, tStart: ev.timestamp, tEnd: nil, kind: ev.kind, title: ev.title, detail: ev.detail)
-                try e.insert(db)
+            
+            // Insert buffered activity events
+            for event in activityEvents {
+                var sessionEvent = SessionEvent(
+                    id: nil,
+                    sessionId: sessionId,
+                    tStart: event.timestamp,
+                    tEnd: nil,
+                    kind: event.kind,
+                    title: event.title,
+                    detail: event.detail
+                )
+                try sessionEvent.insert(db)
+            }
+            
+            // Insert buffered media events  
+            for event in mediaEvents {
+                var sessionEvent = SessionEvent(
+                    id: nil,
+                    sessionId: sessionId,
+                    tStart: event.timestamp,
+                    tEnd: nil,
+                    kind: event.kind,
+                    title: event.title,
+                    detail: event.detail
+                )
+                try sessionEvent.insert(db)
             }
         }
-
-        // Generate AI summary asynchronously (if available)
-        Task { [sessionId] in
-            print("[AI] starting generate() for sessionId=\(sessionId)")
-            if let text = try? await AISummary.generate(for: sessionId) {
-                try? DB.shared.write { db in
-                    try db.execute(sql: """
-                        UPDATE session SET aiSummary = ? WHERE id = ?
-                    """, arguments: [text, sessionId])
+        
+        // Clear buffered events after saving
+        activityMonitor.clearBufferedEvents()
+        mediaWatcher.clearBufferedEvents()
+        
+        // Generate AI summary asynchronously
+        if let sessionId = currentSessionId {
+            Task {
+                do {
+                    if let summary = try await AISummary.generate(for: sessionId) {
+                        print("[BotModel] Generated AI summary: \(summary)")
+                    }
+                } catch {
+                    print("[BotModel] Failed to generate AI summary: \(error)")
                 }
-                print("[AI] saved aiSummary (\(text.count) chars)")
-                NotificationCenter.default.post(name: .focusdAISummaryReady, object: nil, userInfo: ["sessionId": sessionId, "text": text])
-            } else {
-                print("[AI] generate() returned nil")
             }
         }
     }
@@ -702,10 +714,7 @@ struct RobotView: View {
                     case .success:
                         return .green
                     default:
-                        let h = model.colorTheme.hue(for: model.bodyHue)
-                        let s = model.colorTheme.saturation
-                        let b = model.colorTheme.brightness
-                        return Color(hue: h, saturation: s, brightness: b)
+                        return Color(hue: model.bodyHue, saturation: 0.8, brightness: 0.9)
                     }
                 }()
 
@@ -764,18 +773,16 @@ struct RobotView: View {
                 .minimumScaleFactor(0.5)
                 .animation(.linear(duration: 1.0), value: model.bodyHue)
         case .gradient:
-            let h1 = model.colorTheme.hue(for: model.bodyHue)
-            let h2 = model.colorTheme.hue(for: (model.bodyHue + 0.4))
-            let s = model.colorTheme.saturation
-            let b = model.colorTheme.brightness
-            let colors = [Color(hue: h1, saturation: s, brightness: b),
-                          Color(hue: h2, saturation: s, brightness: b)]
+            let h1 = model.bodyHue
+            let h2 = (model.bodyHue + 0.4).truncatingRemainder(dividingBy: 1.0)
+            let colors = [Color(hue: h1, saturation: 0.8, brightness: 1.0),
+                          Color(hue: h2, saturation: 0.8, brightness: 1.0)]
             GradientText(text: timeString(model.remaining), colors: colors)
                 .font(.system(size: model.fontSize, design: .monospaced))
                 .minimumScaleFactor(0.5)
                 .animation(.linear(duration: 1.0), value: model.bodyHue)
         case .neon:
-            let base = model.pomodoroState == .distracted ? Color.red : Color(hue: model.colorTheme.hue(for: model.bodyHue), saturation: model.colorTheme.saturation, brightness: 1.0)
+            let base = model.pomodoroState == .distracted ? Color.red : Color(hue: model.bodyHue, saturation: 0.8, brightness: 1.0)
             NeonGlowText(text: timeString(model.remaining), color: base)
                 .font(.system(size: model.fontSize, design: .monospaced))
                 .minimumScaleFactor(0.5)
@@ -803,6 +810,7 @@ struct GradientText: View {
 final class BotPanelController {
     private var panel: NSPanel!
     private let model: BotModel
+    private var minimizeObserver: NSObjectProtocol?
 
     init(model: BotModel) {
         self.model = model
@@ -826,11 +834,45 @@ final class BotPanelController {
         let hosting = NSHostingView(rootView: RobotView().environmentObject(model))
         hosting.frame = NSRect(origin: .zero, size: NSSize(width: sizeDim, height: sizeDim))
         panel.contentView = hosting
-        print("[Bot] Panel constructed and ordering front…")
-        panel.makeKeyAndOrderFront(nil)
-        panel.orderFrontRegardless()
-
-        // no scale observation
+        
+        // Set initial visibility based on minimize state
+        Task { @MainActor in
+            if model.isMinimized {
+                panel.orderOut(nil)
+            } else {
+                panel.makeKeyAndOrderFront(nil)
+                panel.orderFrontRegardless()
+            }
+        }
+        
+        // Listen for minimize toggle notifications
+        minimizeObserver = NotificationCenter.default.addObserver(
+            forName: .botMinimizeToggled,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor in
+                self?.updateVisibility()
+            }
+        }
+        
+        print("[Bot] Panel constructed")
+    }
+    
+    deinit {
+        if let observer = minimizeObserver {
+            NotificationCenter.default.removeObserver(observer)
+        }
+    }
+    
+    @MainActor
+    private func updateVisibility() {
+        if model.isMinimized {
+            panel.orderOut(nil)
+        } else {
+            panel.makeKeyAndOrderFront(nil)
+            panel.orderFrontRegardless()
+        }
     }
 }
 
@@ -838,8 +880,6 @@ final class BotPanelController {
 struct BotMenuView: View {
     @EnvironmentObject var model: BotModel
     @State private var newWebsite: String = ""
-    @State private var showApps: Bool = false
-    @State private var showWebsites: Bool = false
 
     private var userApps: [NSRunningApplication] {
         NSWorkspace.shared.runningApplications
@@ -849,195 +889,176 @@ struct BotMenuView: View {
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 12) {
-                // Header
-                HStack(spacing: 8) {
-                    Image(systemName: "face.smiling")
-                        .foregroundColor(.accentColor)
-                    Text("FocusdBot")
-                        .font(.headline)
-                    Spacer()
+            VStack(alignment: .leading, spacing: 16) {
+                // Today stats card
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Today")
+                        .font(.title3.bold())
+                    HStack(spacing: 12) {
+                        stat(label: "Pomodoros", value: "\(model.completedToday)", symbol: "checkmark.circle.fill", color: .green)
+                        stat(label: "Focus", value: "\(model.focusedSecondsToday / 60)m", symbol: "clock.fill", color: .blue)
+                        stat(label: "Distracted", value: "\(model.distractedSecondsToday / 60)m", symbol: "exclamationmark.triangle.fill", color: .orange)
+                    }
                 }
+                Divider()
 
-                // Today card
-                Card {
-                    VStack(alignment: .leading, spacing: 8) {
-                        HStack {
-                            Label("Today", systemImage: "sun.max.fill").font(.subheadline.bold())
-                            Spacer()
-                        }
-                        HStack(spacing: 12) {
-                            stat(label: "Pomodoros", value: "\(model.completedToday)", symbol: "checkmark.seal.fill", color: .green)
-                            stat(label: "Focus", value: "\(model.focusedSecondsToday / 60)m", symbol: "timer", color: .blue)
-                            stat(label: "Distracted", value: "\(model.distractedSecondsToday / 60)m", symbol: "exclamationmark.triangle.fill", color: .orange)
+                // Pomodoro duration section
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Pomodoro Duration")
+                        .font(.subheadline.bold())
+                    HStack {
+                        ForEach([15, 25, 45, 60], id: \ .self) { minutes in
+                            Button(action: { model.setDuration(minutes: minutes) }) {
+                                Text("\(minutes)m")
+                                    .fontWeight(minutes == model.durationMinutes ? .bold : .regular)
+                                    .padding(.horizontal, 8)
+                                    .padding(.vertical, 4)
+                                    .background(minutes == model.durationMinutes ? Color.accentColor.opacity(0.2) : Color.clear)
+                                    .cornerRadius(6)
+                            }
+                            .buttonStyle(.plain)
                         }
                     }
                 }
 
-                // Session controls
-                Card {
-                    VStack(alignment: .leading, spacing: 10) {
-                        Label("Session", systemImage: "hourglass").font(.subheadline.bold())
-                        // Appearance / Theme (compact menu style)
-                        HStack(spacing: 8) {
-                            Image(systemName: "sparkles")
-                                .foregroundColor(.accentColor)
-                            Text("Theme")
-                                .font(.caption)
-                                .foregroundColor(.secondary)
-                            Picker("Theme", selection: Binding(get: { model.colorTheme }, set: { model.colorTheme = $0 })) {
-                                ForEach(ColorTheme.allCases) { theme in
-                                    Text(theme.displayName).tag(theme)
-                                }
+                // Short test sessions
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Quick Test")
+                        .font(.subheadline.bold())
+                    HStack {
+                        ForEach([15, 30], id: \ .self) { secs in
+                            Button(action: { model.setTestDuration(secs) }) {
+                                Text("\(secs)s")
+                                    .fontWeight(model.testDurationSeconds == secs ? .bold : .regular)
+                                    .padding(.horizontal, 8)
+                                    .padding(.vertical, 4)
+                                    .background(model.testDurationSeconds == secs ? Color.accentColor.opacity(0.2) : Color.clear)
+                                    .cornerRadius(6)
                             }
-                            .pickerStyle(.menu)
-                            .controlSize(.small)
+                            .buttonStyle(.plain)
                         }
-                        // Duration
-                        HStack(spacing: 8) {
-                            Image(systemName: "timer")
-                                .foregroundColor(.accentColor)
-                            Text("Duration")
-                                .font(.caption)
-                                .foregroundColor(.secondary)
-                            Picker("", selection: Binding(get: { model.durationMinutes }, set: { model.setDuration(minutes: $0) })) {
-                                ForEach([15, 25, 45, 60], id: \.self) { m in
-                                    Text("\(m)m").tag(m)
-                                }
-                            }
-                            .pickerStyle(.segmented)
-                            .controlSize(.small)
-                            .labelsHidden()
+                        Button(action: { model.setTestDuration(nil) }) {
+                            Text("Off")
+                                .fontWeight(model.testDurationSeconds == nil ? .bold : .regular)
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 4)
+                                .background(model.testDurationSeconds == nil ? Color.accentColor.opacity(0.2) : Color.clear)
+                                .cornerRadius(6)
                         }
-                        // Quick test
-                        HStack(spacing: 8) {
-                            Image(systemName: "bolt.fill")
-                                .foregroundColor(.accentColor)
-                            Text("Quick Test")
-                                .font(.caption)
-                                .foregroundColor(.secondary)
-                            Picker("", selection: Binding(get: { model.testDurationSeconds ?? -1 }, set: { model.setTestDuration($0 == -1 ? nil : $0) })) {
-                                Text("Off").tag(-1)
-                                Text("15s").tag(15)
-                                Text("30s").tag(30)
+                        .buttonStyle(.plain)
+                    }
+                }
+
+                // Clock style picker
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Clock Style")
+                        .font(.subheadline.bold())
+                    HStack {
+                        ForEach(ClockStyle.allCases) { style in
+                            Button(action: { model.setClockStyle(style) }) {
+                                Text(style.displayName)
+                                    .fontWeight(model.clockStyle == style ? .bold : .regular)
+                                    .padding(.horizontal, 8)
+                                    .padding(.vertical, 4)
+                                    .background(model.clockStyle == style ? Color.accentColor.opacity(0.2) : Color.clear)
+                                    .cornerRadius(6)
                             }
-                            .pickerStyle(.segmented)
-                            .controlSize(.small)
-                            .labelsHidden()
-                        }
-                        // Clock style
-                        HStack(spacing: 8) {
-                            Image(systemName: "paintbrush.fill")
-                                .foregroundColor(.accentColor)
-                            Text("Clock Style")
-                                .font(.caption)
-                                .foregroundColor(.secondary)
-                            Picker("", selection: Binding(get: { model.clockStyle }, set: { model.setClockStyle($0) })) {
-                                ForEach(ClockStyle.allCases) { style in
-                                    Text(style.shortName).tag(style)
-                                }
-                            }
-                            .pickerStyle(.segmented)
-                            .controlSize(.small)
-                            .labelsHidden()
+                            .buttonStyle(.plain)
                         }
                     }
                 }
 
-                // Permissions & Rules
-                Card {
-                    VStack(alignment: .leading, spacing: 8) {
-                        Label("Permissions", systemImage: "checkmark.shield.fill").font(.subheadline.bold())
-                        DisclosureGroup(isExpanded: $showApps) {
-                            VStack(alignment: .leading, spacing: 6) {
-                                ForEach(userApps, id: \.bundleIdentifier) { app in
-                                    if let bid = app.bundleIdentifier {
-                                        let allowed = model.globalAllowed.contains(bid)
-                                        Button(action: { model.toggleGlobalAllowed(bundle: bid) }) {
-                                            HStack {
-                                                Image(systemName: allowed ? "checkmark.circle.fill" : "circle")
-                                                    .foregroundColor(allowed ? .green : .secondary)
-                                                Text(app.localizedName ?? bid)
-                                            }
-                                        }
-                                        .buttonStyle(.plain)
-                                    }
-                                }
-                            }
-                            .padding(.top, 4)
-                        } label: {
-                            HStack {
-                                Image(systemName: "app.badge.checkmark")
-                                Text("Allowed Apps")
-                                Spacer()
-                            }
-                        }
+                // Character picker removed – robot is now default
 
-                        Divider().opacity(0.2)
-
-                        DisclosureGroup(isExpanded: $showWebsites) {
-                            VStack(alignment: .leading, spacing: 8) {
-                                Button(action: {
-                                    if let url = Safari.frontmostTabURL(), let host = url.host { model.addWebsiteRule(host) }
-                                }) {
-                                    Label("Bookmark Current Site in Safari", systemImage: "bookmark.fill")
-                                }
+                // Allowed apps section
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Allowed Apps")
+                        .font(.subheadline.bold())
+                    ForEach(userApps, id: \ .bundleIdentifier) { app in
+                        if let bid = app.bundleIdentifier {
+                            let allowed = model.globalAllowed.contains(bid)
+                            Button(action: { model.toggleGlobalAllowed(bundle: bid) }) {
                                 HStack {
-                                    TextField("e.g. apple.com", text: $newWebsite)
-                                        .textFieldStyle(.roundedBorder)
-                                    Button("Add") {
-                                        model.addWebsiteRule(newWebsite)
-                                        newWebsite = ""
+                                    if allowed {
+                                        Image(systemName: "checkmark.circle.fill")
+                                            .foregroundColor(.green)
                                     }
-                                }
-                                ForEach(model.webRules.indices, id: \.self) { idx in
-                                    let rule = model.webRules[idx]
-                                    HStack {
-                                        Toggle(isOn: Binding(get: { rule.enabled }, set: { _ in model.toggleRule(id: rule.id) })) { Text(rule.domain) }
-                                            .toggleStyle(.switch)
-                                        Spacer()
-                                        Button(action: { model.removeRule(id: rule.id) }) { Image(systemName: "trash") }
-                                            .buttonStyle(.plain)
-                                    }
+                                    Text(app.localizedName ?? bid)
                                 }
                             }
-                            .padding(.top, 4)
-                        } label: {
-                            HStack {
-                                Image(systemName: "safari")
-                                Text("Allowed Websites")
-                                Spacer()
-                            }
+                            .buttonStyle(.plain)
                         }
                     }
                 }
 
-                // Reflections
+                // Allowed websites section
+                Divider()
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Allowed Websites")
+                        .font(.subheadline.bold())
+
+                    Button(action: {
+                        if let url = Safari.frontmostTabURL(), let host = url.host {
+                            model.addWebsiteRule(host)
+                        }
+                    }) {
+                        Label("Bookmark Current Site in Safari", systemImage: "bookmark.fill")
+                    }
+
+                    HStack {
+                        TextField("e.g. apple.com", text: $newWebsite)
+                            .textFieldStyle(.roundedBorder)
+                        Button("Add") {
+                            model.addWebsiteRule(newWebsite)
+                            newWebsite = ""
+                        }
+                    }
+                    ForEach(model.webRules.indices, id: \ .self) { idx in
+                        let rule = model.webRules[idx]
+                        HStack {
+                            Toggle(isOn: Binding(get: { rule.enabled }, set: { _ in model.toggleRule(id: rule.id) })) {
+                                Text(rule.domain)
+                            }
+                            .toggleStyle(.switch)
+                            Spacer()
+                            Button(action: { model.removeRule(id: rule.id) }) {
+                                Image(systemName: "trash")
+                            }.buttonStyle(.plain)
+                        }
+                    }
+                }
+
+                // Recent reflections
                 if !model.sessionSummaries.isEmpty {
-                    Card {
-                        VStack(alignment: .leading, spacing: 6) {
-                            Label("Recent Reflections", systemImage: "quote.bubble.fill").font(.subheadline.bold())
-                            ForEach(model.sessionSummaries.prefix(5), id: \.self) { item in
-                                Text("• \(item)").font(.caption).foregroundColor(.secondary)
-                            }
+                    Divider()
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Recent Reflections")
+                            .font(.subheadline.bold())
+                        ForEach(model.sessionSummaries.prefix(5), id: \ .self) { item in
+                            Text("• \(item)")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
                         }
                     }
                 }
 
-                HStack {
-                    Button("Open Dashboard", action: { model.showDashboard() })
-                        .buttonStyle(.bordered)
-                    Spacer()
-                    Button("Quit") { NSApplication.shared.terminate(nil) }
-                        .buttonStyle(.bordered)
-                        .tint(.red)
+                Divider()
+                Button("Open Dashboard", action: { model.showDashboard() })
+                    .padding(.vertical, 4)
+                
+                Button(model.isMinimized ? "Show Robot" : "Hide Robot") {
+                    model.toggleMinimize()
                 }
-                .padding(.top, 4)
+                .padding(.vertical, 4)
+                
+                Divider()
+                Button("Quit") { NSApplication.shared.terminate(nil) }
+                    .foregroundColor(.red)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(14)
+            .padding(16)
         }
-        .frame(width: 300, height: 420)
+        .frame(width: 260, height: 380)
     }
 
     @ViewBuilder
@@ -1056,20 +1077,6 @@ struct BotMenuView: View {
     }
 }
 
-// Lightweight card container for menu sections
-private struct Card<Content: View>: View {
-    let content: Content
-    init(@ViewBuilder _ content: () -> Content) { self.content = content() }
-    var body: some View {
-        VStack { content }
-            .padding(10)
-            .background(
-                RoundedRectangle(cornerRadius: 10, style: .continuous)
-                    .fill(.ultraThinMaterial)
-            )
-    }
-}
-
 // MARK: - App Entry
 @main
 struct BotPanelApp: App {
@@ -1085,11 +1092,19 @@ struct BotPanelApp: App {
     }
 
     var body: some Scene {
-        MenuBarExtra("FocusdBot", systemImage: "brain.head.profile") {
+        MenuBarExtra(menuBarTitle, systemImage: "brain.head.profile") {
             BotMenuView()
                 .environmentObject(model)
         }
         .menuBarExtraStyle(.window)
+    }
+    
+    private var menuBarTitle: String {
+        if model.isMinimized && (model.pomodoroState == .running || model.pomodoroState == .distracted) {
+            return formatTime(model.remaining)
+        } else {
+            return "FocusdBot"
+        }
     }
 }
 
@@ -1099,6 +1114,18 @@ extension Int {
 
 extension Double {
     fileprivate func nonZeroOrDefault(_ def: Double) -> Double { self == 0 ? def : self }
+}
+
+// Helper function to format time
+private func formatTime(_ seconds: Int) -> String {
+    let minutes = seconds / 60
+    let remainingSeconds = seconds % 60
+    return String(format: "%d:%02d", minutes, remainingSeconds)
+}
+
+// MARK: - Notification names
+extension Notification.Name {
+    static let botMinimizeToggled = Notification.Name("botMinimizeToggled")
 }
 
 // App delegate to run as accessory (no dock icon) and keep alive

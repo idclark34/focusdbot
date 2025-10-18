@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>FocusdBot – Focus with a friendly companion</title>
+  <meta name="description" content="FocusdBot is a macOS menu bar focus companion with Pomodoro timing, distraction awareness, and AI session summaries." />
+  <meta property="og:type" content="website" />
+  <meta property="og:title" content="FocusdBot – Focus with a friendly companion" />
+  <meta property="og:description" content="A delightful menu bar app that keeps you on track with Pomodoro, distraction awareness, and optional AI summaries." />
+  <meta property="og:image" content="https://focusdbot-api.onrender.com/assets/og.png?v=2" />
+  <meta property="og:image:secure_url" content="https://focusdbot-api.onrender.com/assets/og.png?v=2" />
+  <meta property="og:image:type" content="image/png" />
+  <meta property="og:image:width" content="1200" />
+  <meta property="og:image:height" content="630" />
+  <meta property="og:site_name" content="FocusdBot" />
+  <meta property="og:url" content="https://focusdbot-api.onrender.com/" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="FocusdBot – Focus with a friendly companion" />
+  <meta name="twitter:description" content="A delightful menu bar app that keeps you on track with Pomodoro, distraction awareness, and optional AI summaries." />
+  <meta name="twitter:image" content="https://focusdbot-api.onrender.com/assets/og.png?v=2" />
+  <link rel="icon" href="/assets/focusdbot.svg" type="image/svg+xml" />
+  <link rel="apple-touch-icon" href="/assets/og.png" />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <header class="nav">
+    <div class="container nav-inner">
+      <div class="brand">
+        <img src="/assets/focusdbot.svg" alt="FocusdBot" />
+        <span>FocusdBot</span>
+      </div>
+      <nav>
+        <a href="#features">Features</a>
+        <a href="#pricing">Pricing</a>
+        <a href="#faq">FAQ</a>
+        <a class="btn tiny download-cta" id="navDownload" href="#">Download</a>
+      </nav>
+    </div>
+  </header>
+
+  <section class="hero">
+    <div class="container hero-inner">
+      <div class="hero-copy">
+        <div class="badge">Free • Beta</div>
+        <h1>
+          Meet your <span class="grad">focus companion</span>.
+        </h1>
+        <p class="lead">A delightful menu bar app that keeps you on track with Pomodoro and distraction awareness. <strong>AI session summaries are coming soon.</strong></p>
+        <div class="cta">
+          <a id="downloadBtn" class="btn primary download-cta" href="dist/FocusdBot-Simple-1.0.4.dmg">Download for macOS</a>
+          <a class="btn ghost" href="#features">See features</a>
+        </div>
+        <small class="meta">Unsigned beta • macOS 13+ • AI version coming soon</small>
+        <div class="trust">
+          <span class="dot"></span> 100% local by default. AI requires your proxy (coming soon)
+        </div>
+      </div>
+      <div class="hero-art">
+        <div class="glass" aria-label="App preview">
+          <img src="/assets/focusdbot.svg" alt="FocusdBot mascot" />
+        </div>
+        <div class="orbs">
+          <span style="--i:0"></span>
+          <span style="--i:1"></span>
+          <span style="--i:2"></span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="features" class="features">
+    <div class="container grid-3">
+      <div class="card pop">
+        <h3>Pomodoro, refined</h3>
+        <p>Start sessions with one click. Fluid feedback and micro‑animations keep momentum.</p>
+      </div>
+      <div class="card pop delay1">
+        <h3>Distraction aware</h3>
+        <p>Instantly detects app/website switches and nudges you back to what matters.</p>
+      </div>
+      <div class="card pop delay2">
+        <h3>AI summaries (soon)</h3>
+        <p>Opt‑in AI session recaps via your own proxy. We’re polishing this for a future release.</p>
+      </div>
+    </div>
+  </section>
+
+  <section id="pricing" class="pricing">
+    <div class="container">
+      <h2>Simple pricing</h2>
+      <div class="price-card">
+        <div>
+          <h3>Personal</h3>
+          <p><strong>Free while in beta.</strong> The simple version is available today. AI version coming soon.</p>
+        </div>
+        <div>
+          <a class="btn primary" href="dist/FocusdBot-Simple-1.0.4.dmg">Download</a>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="signup">
+    <div class="container">
+      <h2>Get updates</h2>
+      <form id="signupForm" class="signup-form">
+        <input id="email" type="email" placeholder="you@example.com" required />
+        <button class="btn primary" type="submit">Notify me</button>
+      </form>
+      <p id="signupMsg" class="msg" aria-live="polite"></p>
+    </div>
+  </section>
+
+  <section id="faq" class="faq container">
+    <h2>FAQ</h2>
+    <details>
+      <summary>Is FocusdBot private?</summary>
+      <p>All tracking stays on your Mac. AI summaries use your own proxy if you enable them.</p>
+    </details>
+    <details>
+      <summary>What permissions are required?</summary>
+      <p>Accessibility (for activity monitoring) and Apple Events to Safari (for website rules).</p>
+    </details>
+  </section>
+
+  <footer class="footer">
+    <div class="container">
+      <span>© <span id="year"></span> FocusdBot</span>
+      <a href="https://github.com/idclark34/watchdog" rel="noopener">GitHub</a>
+    </div>
+  </footer>
+
+  <script>window.API_BASE='https://focusdbot-api.onrender.com';</script>
+  <script src="/app.js"></script>
+</body>
+</html>
