@@ -29,10 +29,10 @@
 <body>
   <header class="nav">
     <div class="container nav-inner">
-      <div class="brand">
+      <a class="brand" href="#">
         <img src="/assets/robot.png" alt="FocusdBot" />
         <span>FocusdBot</span>
-      </div>
+      </a>
       <nav>
         <a href="#features">Features</a>
         <a href="#faq">FAQ</a>
@@ -45,42 +45,33 @@
     <div class="container hero-inner">
       <div class="hero-copy">
         <div class="badge">Minimal • Fast • Local</div>
-        <h1>
-          Stay focused with a <span class="grad">simple timer</span>.
-        </h1>
-        <p class="lead">A lightweight macOS menu bar app with Pomodoro and distraction awareness. No accounts, no cloud, no hype.</p>
+        <h1>Stay focused with a simple timer.</h1>
+        <p class="lead">A clean macOS menu bar app with Pomodoro and distraction rules. No accounts. No cloud. Just focus.</p>
         <div class="cta">
           <a id="downloadBtn" class="btn primary download-cta" href="dist/FocusdBot-Simple-1.0.7.dmg">Download for macOS</a>
-          <a class="btn ghost" href="#features">See features</a>
+          <a class="btn ghost" href="#features">Explore features</a>
         </div>
         <small class="meta">Unsigned beta • macOS 13+</small>
       </div>
       <div class="hero-art">
-        <div class="glass" aria-label="App preview">
-          <img src="/assets/robot.png" alt="FocusdBot mascot" />
-        </div>
-        <div class="orbs">
-          <span style="--i:0"></span>
-          <span style="--i:1"></span>
-          <span style="--i:2"></span>
-        </div>
+        <img class="hero-img" src="/assets/robot.png" alt="FocusdBot mascot" />
       </div>
     </div>
   </section>
 
   <section id="features" class="features">
-    <div class="container grid-3">
-      <div class="card pop">
+    <div class="container features-inner">
+      <div class="feature">
         <h3>Pomodoro</h3>
-        <p>One‑click start. Clear feedback without distractions.</p>
+        <p>Start a session with one click. Gentle, unobtrusive feedback helps you keep momentum.</p>
       </div>
-      <div class="card pop delay1">
+      <div class="feature">
         <h3>Distraction rules</h3>
-        <p>Allow only what matters. Gently flags distractions.</p>
+        <p>Allow essential apps and sites—FocusdBot quietly flags the rest.</p>
       </div>
-      <div class="card pop delay2">
+      <div class="feature">
         <h3>Privacy first</h3>
-        <p>Everything runs locally. Your data stays on your Mac.</p>
+        <p>Runs entirely on your Mac. No accounts or background services.</p>
       </div>
     </div>
   </section>
@@ -113,7 +104,7 @@
   <footer class="footer">
     <div class="container">
       <span>© <span id="year"></span> FocusdBot</span>
-      <a href="https://github.com/idclark34/watchdog" rel="noopener">GitHub</a>
+      <a href="https://github.com/idclark34/focusdbot" rel="noopener">GitHub</a>
     </div>
   </footer>
 
