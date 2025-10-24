@@ -1,8 +1,8 @@
 const yearEl = document.getElementById('year');
 if (yearEl) yearEl.textContent = new Date().getFullYear();
 
-// Configure download link
-const ZIP_URL = 'dist/FocusdBot-Simple-1.0.7.dmg';
+// Configure download link (use stapled DMG)
+const ZIP_URL = 'dist/FocusdBot-Simple.dmg';
 const API_BASE = window.API_BASE || '';
 const setDownload = (el) => {
   if (!el) return;
