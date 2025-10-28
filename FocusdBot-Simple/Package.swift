@@ -16,7 +16,7 @@ let package = Package(
             dependencies: [
                 .product(name: "GRDB", package: "GRDB.swift")
             ],
-            sources: ["BotPanelApp.swift", "Database.swift", "ReflectionWindow.swift", "Safari.swift"],
+            sources: ["BotPanelApp.swift", "Database.swift", "ReflectionWindow.swift", "Safari.swift", "Chrome.swift"],
             linkerSettings: [
                 .linkedFramework("AppKit"),
                 .linkedFramework("ApplicationServices"),

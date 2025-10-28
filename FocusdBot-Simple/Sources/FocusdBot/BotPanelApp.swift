@@ -287,6 +287,8 @@ class BotModel: ObservableObject {
     // Cache last known Safari host allow result to avoid transient AppleScript failures
     private var lastSafariHost: String? = nil
     private var lastSafariAllowed: Bool = false
+    private var lastChromeHost: String? = nil
+    private var lastChromeAllowed: Bool = false
 
     private func loadWebRules() {
         if let data = UserDefaults.standard.data(forKey: webRuleKey),
@@ -400,6 +402,25 @@ class BotModel: ObservableObject {
             } else {
                 // If Safari URL unavailable this tick, fall back to last known result
                 reallyAllowed = lastSafariAllowed
+            }
+        }
+
+        // Check website rules for Chrome if Chrome is not already allowed as an app.
+        let isChrome = (currentBundle == "com.google.Chrome" || currentBundle == "Google Chrome")
+        if isChrome && !allowed {
+            if let url = Chrome.activeTabURL(), let h = url.host?.lowercased() {
+                let host = h.hasPrefix("www.") ? String(h.dropFirst(4)) : h
+                let isWebsiteAllowed = webRules.contains { rule in
+                    guard rule.enabled else { return false }
+                    let d = rule.domain
+                    return host == d || host.hasSuffix("." + d)
+                }
+                lastChromeHost = host
+                lastChromeAllowed = isWebsiteAllowed
+                reallyAllowed = isWebsiteAllowed
+            } else {
+                // If Chrome URL unavailable this tick, fall back to last known result
+                reallyAllowed = lastChromeAllowed
             }
         }
 
