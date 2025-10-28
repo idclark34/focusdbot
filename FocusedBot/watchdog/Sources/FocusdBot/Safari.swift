@@ -5,9 +5,7 @@ enum Safari {
     /// Gets the URL of the frontmost tab in Safari, if available.
     /// Returns `nil` if Safari is not running or has no open window.
     static func frontmostTabURL() -> URL? {
-        guard let safari = NSWorkspace.shared.runningApplications.first(where: {
-            $0.bundleIdentifier == "com.apple.Safari"
-        }) else {
+        guard NSWorkspace.shared.runningApplications.contains(where: { $0.bundleIdentifier == "com.apple.Safari" }) else {
             return nil
         }
         
