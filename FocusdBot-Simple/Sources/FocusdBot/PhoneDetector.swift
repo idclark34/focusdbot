@@ -1,5 +1,6 @@
 @preconcurrency import AVFoundation
-import Vision
+@preconcurrency import Vision
+import CoreML
 import AppKit
 import SwiftUI
 
@@ -36,16 +37,53 @@ class PhoneDetector: NSObject, ObservableObject {
     private let confidenceThreshold: Float = 0.6 // 60% confidence to trigger
     private let cooldownPeriod: TimeInterval = 2.0 // Avoid rapid false positives
     
+    // MARK: - Vision Properties
+    nonisolated(unsafe) private var visionRequest: VNRequest?
+    private let visionQueue = DispatchQueue(label: "com.focusdbot.vision", qos: .userInitiated)
+    
     // MARK: - Initialization
     override init() {
         super.init()
         checkCameraPermission()
+        setupVisionDetection()
     }
     
     deinit {
         captureSession?.stopRunning()
         captureSession = nil
         videoOutput = nil
+    }
+    
+    // MARK: - Vision Setup
+    private func setupVisionDetection() {
+        // Try to use a custom Core ML model if available
+        // Otherwise, fall back to Vision's built-in object detection
+        
+        // Option 1: Try to load custom YOLO model (if user added it)
+        if let modelURL = Bundle.main.url(forResource: "YOLOv3Tiny", withExtension: "mlmodelc") ??
+                          Bundle.main.url(forResource: "yolov8n", withExtension: "mlmodelc") {
+            do {
+                let model = try VNCoreMLModel(for: MLModel(contentsOf: modelURL))
+                let request = VNCoreMLRequest(model: model) { [weak self] request, error in
+                    self?.handleVisionResults(request: request, error: error)
+                }
+                request.imageCropAndScaleOption = .scaleFill
+                self.visionRequest = request
+                print("[PhoneDetector] Custom ML model loaded successfully")
+                return
+            } catch {
+                print("[PhoneDetector] Could not load custom model: \(error.localizedDescription)")
+            }
+        }
+        
+        // Option 2: Use Vision's built-in object recognition
+        let request = VNRecognizeAnimalsRequest { [weak self] request, error in
+            // This won't detect phones directly, but we'll use it as a fallback
+            // In production, you'd want to use a proper COCO-trained model
+            self?.handleBuiltInVisionResults(request: request, error: error)
+        }
+        self.visionRequest = request
+        print("[PhoneDetector] Using built-in Vision detection (limited functionality)")
     }
     
     // MARK: - Permission Handling
@@ -188,54 +226,97 @@ extension PhoneDetector: AVCaptureVideoDataOutputSampleBufferDelegate {
     
     // MARK: - Frame Analysis
     private nonisolated func analyzeFrame(_ pixelBuffer: CVPixelBuffer) {
-        // TODO: In Phase 2, we'll add Vision framework object detection here
-        // For now, this is a placeholder that simulates detection for testing
+        guard let request = self.visionRequest else {
+            print("[PhoneDetector] Vision request not initialized")
+            return
+        }
+        
+        // Create image request handler
+        let handler = VNImageRequestHandler(cvPixelBuffer: pixelBuffer, orientation: .up, options: [:])
+        
+        // Perform detection on vision queue
+        DispatchQueue.global(qos: .userInitiated).async {
+            do {
+                try handler.perform([request])
+            } catch {
+                print("[PhoneDetector] Vision request failed: \(error.localizedDescription)")
+            }
+        }
+    }
+    
+    // MARK: - Vision Result Handlers
+    private func handleVisionResults(request: VNRequest, error: Error?) {
+        if let error = error {
+            print("[PhoneDetector] Vision error: \(error.localizedDescription)")
+            return
+        }
+        
+        guard let results = request.results as? [VNRecognizedObjectObservation] else {
+            return
+        }
+        
+        // Look for "cell phone" in the detected objects
+        // COCO dataset class 67 is "cell phone"
+        var phoneFound = false
+        var maxConfidence: Float = 0.0
+        
+        for observation in results {
+            // Check all labels for phone-related identifiers
+            for label in observation.labels {
+                let identifier = label.identifier.lowercased()
+                
+                // Match phone-related classes
+                if identifier.contains("phone") || 
+                   identifier.contains("cell") ||
+                   identifier.contains("mobile") ||
+                   identifier == "67" { // COCO class ID for cell phone
+                    
+                    let confidence = label.confidence
+                    if confidence >= self.confidenceThreshold {
+                        phoneFound = true
+                        maxConfidence = max(maxConfidence, confidence)
+                        print("[PhoneDetector] Phone detected! Confidence: \(confidence)")
+                    }
+                }
+            }
+        }
+        
+        // Update state on main actor
+        Task { @MainActor in
+            if phoneFound {
+                self.phoneDetected = true
+                self.confidenceLevel = maxConfidence
+                self.lastDetectionTime = Date()
+                
+                // Auto-reset after cooldown to avoid continuous triggering
+                Task {
+                    try? await Task.sleep(nanoseconds: UInt64(self.cooldownPeriod * 1_000_000_000))
+                    await self.resetDetection()
+                }
+            }
+        }
+    }
+    
+    private func handleBuiltInVisionResults(request: VNRequest, error: Error?) {
+        // Fallback handler when using built-in Vision (without proper COCO model)
+        // This won't actually detect phones, but provides graceful fallback
         
         #if DEBUG
-        // Simulate random detection for testing UI (remove in production)
-        let simulateDetection = false // Set to true to test UI
-        if simulateDetection {
-            let randomDetection = Int.random(in: 0...100) < 5 // 5% chance
-            if randomDetection {
-                Task { @MainActor in
-                    self.phoneDetected = true
-                    self.confidenceLevel = Float.random(in: 0.6...0.95)
-                    self.lastDetectionTime = Date()
-                    
-                    // Auto-reset after cooldown
-                    Task {
-                        try? await Task.sleep(nanoseconds: UInt64(self.cooldownPeriod * 1_000_000_000))
-                        await self.resetDetection()
-                    }
+        // In debug mode, occasionally trigger for testing
+        if Int.random(in: 0...100) < 2 { // 2% chance for testing
+            Task { @MainActor in
+                self.phoneDetected = true
+                self.confidenceLevel = 0.65
+                self.lastDetectionTime = Date()
+                print("[PhoneDetector] Debug: Simulated phone detection")
+                
+                Task {
+                    try? await Task.sleep(nanoseconds: UInt64(self.cooldownPeriod * 1_000_000_000))
+                    await self.resetDetection()
                 }
             }
         }
         #endif
-        
-        // Placeholder for ML model integration
-        // We'll add Vision framework code here in Phase 2:
-        /*
-        let request = VNCoreMLRequest(model: phoneDetectionModel) { [weak self] request, error in
-            guard let results = request.results as? [VNRecognizedObjectObservation] else { return }
-            
-            // Check for phone detection
-            for observation in results {
-                if observation.labels.contains(where: { $0.identifier.contains("phone") || $0.identifier.contains("cell") }) {
-                    let confidence = observation.confidence
-                    if confidence >= self?.confidenceThreshold ?? 0.6 {
-                        Task { @MainActor in
-                            self?.phoneDetected = true
-                            self?.confidenceLevel = confidence
-                            self?.lastDetectionTime = Date()
-                        }
-                    }
-                }
-            }
-        }
-        
-        let handler = VNImageRequestHandler(cvPixelBuffer: pixelBuffer, options: [:])
-        try? handler.perform([request])
-        */
     }
 }
 
