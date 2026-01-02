@@ -238,7 +238,7 @@ class BotModel: ObservableObject {
 
         // insert session row
         currentSessionId = try? DB.shared.write { db in
-            var s = Session(id: nil, start: Date(), end: nil, type: "work", plannedMinutes: durationMinutes, completed: false)
+            let s = Session(id: nil, start: Date(), end: nil, type: "work", plannedMinutes: durationMinutes, completed: false)
             try s.insert(db)
             return db.lastInsertedRowID
         }
@@ -319,6 +319,30 @@ class BotModel: ObservableObject {
     // Cache last known Safari host allow result to avoid transient AppleScript failures
     private var lastSafariHost: String? = nil
     private var lastSafariAllowed: Bool = false
+    
+    // Helper functions for domain sanitization
+    private func sanitizeDomainInput(_ input: String) -> String? {
+        let trimmed = input.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.isEmpty { return nil }
+        // Try URL parsing first
+        if let url = URL(string: trimmed), let host = url.host {
+            return normalizeHost(host)
+        }
+        // If it doesn't parse as URL, try adding a scheme and reparse
+        if let url = URL(string: "https://" + trimmed), let host = url.host {
+            return normalizeHost(host)
+        }
+        // Fallback: strip any path and www.
+        let lower = trimmed.lowercased()
+        let base = lower.split(separator: "/", maxSplits: 1).first.map(String.init) ?? lower
+        return normalizeHost(base)
+    }
+    
+    private func normalizeHost(_ host: String) -> String {
+        let lower = host.lowercased()
+        if lower.hasPrefix("www.") { return String(lower.dropFirst(4)) }
+        return lower
+    }
 
     private func loadWebRules() {
         if let data = UserDefaults.standard.data(forKey: webRuleKey),
@@ -433,30 +457,6 @@ class BotModel: ObservableObject {
                 // If Safari URL unavailable this tick, fall back to last known result
                 reallyAllowed = lastSafariAllowed
             }
-        }
-
-    // Sanitize input like "https://www.youtube.com/watch?v=.." to "youtube.com"
-    private func sanitizeDomainInput(_ input: String) -> String? {
-        let trimmed = input.trimmingCharacters(in: .whitespacesAndNewlines)
-        if trimmed.isEmpty { return nil }
-        // Try URL parsing first
-        if let url = URL(string: trimmed), let host = url.host {
-            return normalizeHost(host)
-        }
-        // If it doesn't parse as URL, try adding a scheme and reparse
-        if let url = URL(string: "https://" + trimmed), let host = url.host {
-            return normalizeHost(host)
-        }
-        // Fallback: strip any path and www.
-        let lower = trimmed.lowercased()
-        let base = lower.split(separator: "/", maxSplits: 1).first.map(String.init) ?? lower
-        return normalizeHost(base)
-    }
-
-    private func normalizeHost(_ host: String) -> String {
-        let lower = host.lowercased()
-        if lower.hasPrefix("www.") { return String(lower.dropFirst(4)) }
-        return lower
         }
 
         switch pomodoroState {
@@ -589,7 +589,7 @@ class BotModel: ObservableObject {
 
             // Insert app usage records
             for (bundle, seconds) in sessionAppSeconds {
-                var appRecord = SessionApp(id: nil, sessionId: sessionId, bundleId: bundle, seconds: seconds)
+                let appRecord = SessionApp(id: nil, sessionId: sessionId, bundleId: bundle, seconds: seconds)
                 try appRecord.insert(db)
             }
         }
@@ -1507,4 +1507,5 @@ extension Notification.Name {
     static let botMinimizeToggled = Notification.Name("botMinimizeToggled")
     static let botShowPanel = Notification.Name("botShowPanel")
     static let botHidePanel = Notification.Name("botHidePanel")
+    static let focusdAISummaryReady = Notification.Name("focusdAISummaryReady")
 }

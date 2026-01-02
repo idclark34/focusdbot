@@ -1,4 +1,4 @@
-import AVFoundation
+@preconcurrency import AVFoundation
 import Vision
 import AppKit
 import SwiftUI
@@ -32,7 +32,7 @@ class PhoneDetector: NSObject, ObservableObject {
     
     // MARK: - Detection Settings
     private let detectionInterval: TimeInterval = 0.5 // Process 2 frames per second
-    private var lastProcessedTime: Date = .distantPast
+    nonisolated(unsafe) private var lastProcessedTime: Date = .distantPast
     private let confidenceThreshold: Float = 0.6 // 60% confidence to trigger
     private let cooldownPeriod: TimeInterval = 2.0 // Avoid rapid false positives
     
@@ -43,7 +43,9 @@ class PhoneDetector: NSObject, ObservableObject {
     }
     
     deinit {
-        stopDetection()
+        captureSession?.stopRunning()
+        captureSession = nil
+        videoOutput = nil
     }
     
     // MARK: - Permission Handling
