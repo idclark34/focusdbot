@@ -47,10 +47,11 @@ class PhoneDetector: NSObject, ObservableObject {
     nonisolated(unsafe) private var visionRequest: VNRequest?
     private let visionQueue = DispatchQueue(label: "com.focusdbot.vision", qos: .userInitiated)
     
-    // MARK: - Face Orientation Tracking
-    nonisolated(unsafe) private var headDownStartTime: Date?
-    private let headDownThreshold: TimeInterval = 5.0 // Detect after 5 seconds of head down
-    private let headTiltAngleThreshold: Double = -15.0 // Degrees (negative = looking down)
+    // MARK: - Face Disappearance Tracking
+    // New approach: Detect when face disappears (user looks away at phone)
+    nonisolated(unsafe) private var lastFaceSeenTime: Date?
+    nonisolated(unsafe) private var faceDisappearStartTime: Date?
+    private let faceDisappearThreshold: TimeInterval = 8.0 // Detect after 8 seconds without face
     
     // MARK: - Initialization
     override init() {
@@ -228,8 +229,8 @@ class PhoneDetector: NSObject, ObservableObject {
         // Fail silently if not available
         do {
             let content = UNMutableNotificationContent()
-            content.title = "Phone Detected!"
-            content.body = "You're looking at your phone during focus time"
+            content.title = "FocusdBot - Distraction Detected"
+            content.body = "You're looking away from your screen!"
             content.sound = .default
             
             let request = UNNotificationRequest(identifier: UUID().uuidString, content: content, trigger: nil)
@@ -297,82 +298,43 @@ extension PhoneDetector: AVCaptureVideoDataOutputSampleBufferDelegate {
             return
         }
         
-        guard let results = request.results as? [VNFaceObservation] else {
-            // No face detected - reset timer
-            self.headDownStartTime = nil
-            Task { @MainActor in
-                self.currentHeadPitch = nil
-                self.faceDetected = false
-                self.headDownDuration = 0
-            }
-            return
-        }
-        
-        // Update UI state
-        Task { @MainActor in
-            self.faceDetected = !results.isEmpty
-        }
-        
-        // Check if any face is tilted down (phone usage posture)
-        var headIsDown = false
-        var currentPitch: Double = 0
-        
-        for faceObservation in results {
-            // Get face pitch (head tilt up/down)
-            // Negative pitch = looking down
-            // Positive pitch = looking up
-            
-            if let pitch = faceObservation.pitch?.doubleValue {
-                let pitchDegrees = pitch * 180.0 / .pi // Convert radians to degrees
-                currentPitch = pitchDegrees
-                
-                // Update UI with current pitch
-                Task { @MainActor in
-                    self.currentHeadPitch = pitchDegrees
-                }
-                
-                print("[PhoneDetector] Head pitch: \(String(format: "%.1f", pitchDegrees))°")
-                
-                // Check if head is tilted down beyond threshold
-                if pitchDegrees < headTiltAngleThreshold {
-                    headIsDown = true
-                    print("[PhoneDetector] Head down detected (pitch: \(String(format: "%.1f", pitchDegrees))°)")
-                    break
-                }
-            }
-        }
-        
         let now = Date()
-        
-        if headIsDown {
-            // Head is down - start or continue timer
-            if headDownStartTime == nil {
-                headDownStartTime = now
-                print("[PhoneDetector] Started tracking head-down duration")
-            } else if let startTime = headDownStartTime {
-                let duration = now.timeIntervalSince(startTime)
+        guard let results = request.results as? [VNFaceObservation], !results.isEmpty else {
+            // NO FACE DETECTED - user may be looking away at phone
+            Task { @MainActor in
+                self.faceDetected = false
+                self.currentHeadPitch = nil
+            }
+            
+            // Start tracking face disappearance
+            if faceDisappearStartTime == nil && lastFaceSeenTime != nil {
+                // Face just disappeared
+                faceDisappearStartTime = now
+                print("[PhoneDetector] ⚠️ Face disappeared - starting timer")
+            } else if let disappearStart = faceDisappearStartTime {
+                // Face has been gone for a while
+                let duration = now.timeIntervalSince(disappearStart)
                 
                 // Update UI with duration
                 Task { @MainActor in
                     self.headDownDuration = duration
                 }
                 
-                if duration >= headDownThreshold {
-                    // Head has been down long enough - trigger detection
+                print("[PhoneDetector] Face gone for \(String(format: "%.1f", duration))s")
+                
+                if duration >= faceDisappearThreshold && !phoneDetected {
+                    // Face has been gone long enough - trigger detection
                     Task { @MainActor in
                         self.phoneDetected = true
-                        self.confidenceLevel = 0.85 // High confidence for sustained head-down
+                        self.confidenceLevel = 0.9 // High confidence for sustained absence
                         self.lastDetectionTime = Date()
-                        print("[PhoneDetector] Phone usage detected! (head down for \(String(format: "%.1f", duration))s)")
+                        print("[PhoneDetector] 🚨 Phone usage detected! (face gone for \(String(format: "%.1f", duration))s)")
                         
                         // Play sound feedback
                         NSSound.beep()
                         
                         // Show notification
                         self.sendNotification()
-                        
-                        // Reset timer to avoid continuous triggering
-                        self.headDownStartTime = nil
                         
                         // Auto-reset after cooldown
                         Task {
@@ -382,15 +344,33 @@ extension PhoneDetector: AVCaptureVideoDataOutputSampleBufferDelegate {
                     }
                 }
             }
-        } else {
-            // Head is up - reset timer
-            if headDownStartTime != nil {
-                print("[PhoneDetector] Head back up - resetting timer")
-                headDownStartTime = nil
-            }
-            // Reset duration display
+            return
+        }
+        
+        // FACE DETECTED - user is looking at screen
+        Task { @MainActor in
+            self.faceDetected = true
+        }
+        
+        // Update last seen time
+        lastFaceSeenTime = now
+        
+        // Reset disappearance tracking
+        if faceDisappearStartTime != nil {
+            print("[PhoneDetector] ✅ Face back - resetting timer")
+            faceDisappearStartTime = nil
+        }
+        
+        // Reset duration display
+        Task { @MainActor in
+            self.headDownDuration = 0
+        }
+        
+        // Show pitch for debugging (optional)
+        if let face = results.first, let pitch = face.pitch?.doubleValue {
+            let pitchDegrees = pitch * 180.0 / .pi
             Task { @MainActor in
-                self.headDownDuration = 0
+                self.currentHeadPitch = pitchDegrees
             }
         }
     }
@@ -464,12 +444,13 @@ struct PhoneDetectionSettingsView: View {
                         }
                         
                         if detector.headDownDuration > 0 {
+                            // Face is gone - tracking duration
                             HStack {
-                                Text("Looking down for:")
+                                Text("⚠️ Face gone for:")
                                     .font(.caption2)
                                     .foregroundColor(.orange)
                                 Spacer()
-                                Text("\(String(format: "%.1f", detector.headDownDuration))s / 5.0s")
+                                Text("\(String(format: "%.1f", detector.headDownDuration))s / 8.0s")
                                     .font(.caption2)
                                     .foregroundColor(.orange)
                                     .monospacedDigit()
@@ -484,16 +465,16 @@ struct PhoneDetectionSettingsView: View {
                                     
                                     Rectangle()
                                         .fill(Color.orange)
-                                        .frame(width: geometry.size.width * CGFloat(min(detector.headDownDuration / 5.0, 1.0)), height: 4)
+                                        .frame(width: geometry.size.width * CGFloat(min(detector.headDownDuration / 8.0, 1.0)), height: 4)
                                 }
                                 .clipShape(RoundedRectangle(cornerRadius: 2))
                             }
                             .frame(height: 4)
                         }
                     } else {
-                        Text("❌ No face detected")
+                        Text("⚠️ Looking away")
                             .font(.caption2)
-                            .foregroundColor(.red)
+                            .foregroundColor(.orange)
                     }
                 }
             }
@@ -502,7 +483,7 @@ struct PhoneDetectionSettingsView: View {
                 HStack {
                     Image(systemName: "iphone")
                         .foregroundColor(.red)
-                    Text("Head down - likely on phone")
+                    Text("Looking away - distracted!")
                         .font(.caption2)
                         .foregroundColor(.red)
                 }
@@ -512,7 +493,7 @@ struct PhoneDetectionSettingsView: View {
                 .clipShape(RoundedRectangle(cornerRadius: 4))
             }
             
-            Text("Detects when you're looking down (phone usage posture). Triggers after 5 seconds.")
+            Text("Detects when you look away from screen (e.g., at phone). Triggers after 8 seconds.")
                 .font(.caption2)
                 .foregroundColor(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
