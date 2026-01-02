@@ -41,6 +41,11 @@ class PhoneDetector: NSObject, ObservableObject {
     nonisolated(unsafe) private var visionRequest: VNRequest?
     private let visionQueue = DispatchQueue(label: "com.focusdbot.vision", qos: .userInitiated)
     
+    // MARK: - Face Orientation Tracking
+    nonisolated(unsafe) private var headDownStartTime: Date?
+    private let headDownThreshold: TimeInterval = 5.0 // Detect after 5 seconds of head down
+    private let headTiltAngleThreshold: Double = -15.0 // Degrees (negative = looking down)
+    
     // MARK: - Initialization
     override init() {
         super.init()
@@ -56,34 +61,18 @@ class PhoneDetector: NSObject, ObservableObject {
     
     // MARK: - Vision Setup
     private func setupVisionDetection() {
-        // Try to use a custom Core ML model if available
-        // Otherwise, fall back to Vision's built-in object detection
-        
-        // Option 1: Try to load custom YOLO model (if user added it)
-        if let modelURL = Bundle.main.url(forResource: "YOLOv3Tiny", withExtension: "mlmodelc") ??
-                          Bundle.main.url(forResource: "yolov8n", withExtension: "mlmodelc") {
-            do {
-                let model = try VNCoreMLModel(for: MLModel(contentsOf: modelURL))
-                let request = VNCoreMLRequest(model: model) { [weak self] request, error in
-                    self?.handleVisionResults(request: request, error: error)
-                }
-                request.imageCropAndScaleOption = .scaleFill
-                self.visionRequest = request
-                print("[PhoneDetector] Custom ML model loaded successfully")
-                return
-            } catch {
-                print("[PhoneDetector] Could not load custom model: \(error.localizedDescription)")
-            }
+        // Use face detection with landmarks to detect head orientation
+        // This detects when user is looking down (phone usage posture)
+        let request = VNDetectFaceLandmarksRequest { [weak self] request, error in
+            self?.handleFaceDetection(request: request, error: error)
         }
         
-        // Option 2: Use Vision's built-in object recognition
-        let request = VNRecognizeAnimalsRequest { [weak self] request, error in
-            // This won't detect phones directly, but we'll use it as a fallback
-            // In production, you'd want to use a proper COCO-trained model
-            self?.handleBuiltInVisionResults(request: request, error: error)
-        }
+        // Configure for better tracking
+        request.revision = VNDetectFaceLandmarksRequestRevision3
+        
         self.visionRequest = request
-        print("[PhoneDetector] Using built-in Vision detection (limited functionality)")
+        print("[PhoneDetector] Face orientation detection initialized")
+        print("[PhoneDetector] Will detect head-down posture (looking at phone)")
     }
     
     // MARK: - Permission Handling
@@ -244,79 +233,77 @@ extension PhoneDetector: AVCaptureVideoDataOutputSampleBufferDelegate {
         }
     }
     
-    // MARK: - Vision Result Handlers
-    private func handleVisionResults(request: VNRequest, error: Error?) {
+    // MARK: - Face Detection Handler
+    private func handleFaceDetection(request: VNRequest, error: Error?) {
         if let error = error {
-            print("[PhoneDetector] Vision error: \(error.localizedDescription)")
+            print("[PhoneDetector] Face detection error: \(error.localizedDescription)")
             return
         }
         
-        guard let results = request.results as? [VNRecognizedObjectObservation] else {
+        guard let results = request.results as? [VNFaceObservation] else {
+            // No face detected - reset timer
+            self.headDownStartTime = nil
             return
         }
         
-        // Look for "cell phone" in the detected objects
-        // COCO dataset class 67 is "cell phone"
-        var phoneFound = false
-        var maxConfidence: Float = 0.0
+        // Check if any face is tilted down (phone usage posture)
+        var headIsDown = false
         
-        for observation in results {
-            // Check all labels for phone-related identifiers
-            for label in observation.labels {
-                let identifier = label.identifier.lowercased()
+        for faceObservation in results {
+            // Get face pitch (head tilt up/down)
+            // Negative pitch = looking down
+            // Positive pitch = looking up
+            
+            if let pitch = faceObservation.pitch?.doubleValue {
+                let pitchDegrees = pitch * 180.0 / .pi // Convert radians to degrees
                 
-                // Match phone-related classes
-                if identifier.contains("phone") || 
-                   identifier.contains("cell") ||
-                   identifier.contains("mobile") ||
-                   identifier == "67" { // COCO class ID for cell phone
-                    
-                    let confidence = label.confidence
-                    if confidence >= self.confidenceThreshold {
-                        phoneFound = true
-                        maxConfidence = max(maxConfidence, confidence)
-                        print("[PhoneDetector] Phone detected! Confidence: \(confidence)")
+                print("[PhoneDetector] Head pitch: \(String(format: "%.1f", pitchDegrees))°")
+                
+                // Check if head is tilted down beyond threshold
+                if pitchDegrees < headTiltAngleThreshold {
+                    headIsDown = true
+                    print("[PhoneDetector] Head down detected (pitch: \(String(format: "%.1f", pitchDegrees))°)")
+                    break
+                }
+            }
+        }
+        
+        let now = Date()
+        
+        if headIsDown {
+            // Head is down - start or continue timer
+            if headDownStartTime == nil {
+                headDownStartTime = now
+                print("[PhoneDetector] Started tracking head-down duration")
+            } else if let startTime = headDownStartTime {
+                let duration = now.timeIntervalSince(startTime)
+                
+                if duration >= headDownThreshold {
+                    // Head has been down long enough - trigger detection
+                    Task { @MainActor in
+                        self.phoneDetected = true
+                        self.confidenceLevel = 0.85 // High confidence for sustained head-down
+                        self.lastDetectionTime = Date()
+                        print("[PhoneDetector] Phone usage detected! (head down for \(String(format: "%.1f", duration))s)")
+                        
+                        // Reset timer to avoid continuous triggering
+                        self.headDownStartTime = nil
+                        
+                        // Auto-reset after cooldown
+                        Task {
+                            try? await Task.sleep(nanoseconds: UInt64(self.cooldownPeriod * 1_000_000_000))
+                            await self.resetDetection()
+                        }
                     }
                 }
             }
-        }
-        
-        // Update state on main actor
-        Task { @MainActor in
-            if phoneFound {
-                self.phoneDetected = true
-                self.confidenceLevel = maxConfidence
-                self.lastDetectionTime = Date()
-                
-                // Auto-reset after cooldown to avoid continuous triggering
-                Task {
-                    try? await Task.sleep(nanoseconds: UInt64(self.cooldownPeriod * 1_000_000_000))
-                    await self.resetDetection()
-                }
+        } else {
+            // Head is up - reset timer
+            if headDownStartTime != nil {
+                print("[PhoneDetector] Head back up - resetting timer")
+                headDownStartTime = nil
             }
         }
-    }
-    
-    private func handleBuiltInVisionResults(request: VNRequest, error: Error?) {
-        // Fallback handler when using built-in Vision (without proper COCO model)
-        // This won't actually detect phones, but provides graceful fallback
-        
-        #if DEBUG
-        // In debug mode, occasionally trigger for testing
-        if Int.random(in: 0...100) < 2 { // 2% chance for testing
-            Task { @MainActor in
-                self.phoneDetected = true
-                self.confidenceLevel = 0.65
-                self.lastDetectionTime = Date()
-                print("[PhoneDetector] Debug: Simulated phone detection")
-                
-                Task {
-                    try? await Task.sleep(nanoseconds: UInt64(self.cooldownPeriod * 1_000_000_000))
-                    await self.resetDetection()
-                }
-            }
-        }
-        #endif
     }
 }
 
@@ -376,7 +363,7 @@ struct PhoneDetectionSettingsView: View {
                 HStack {
                     Image(systemName: "iphone")
                         .foregroundColor(.red)
-                    Text("Phone detected (\(Int(detector.confidenceLevel * 100))%)")
+                    Text("Head down - likely on phone")
                         .font(.caption2)
                         .foregroundColor(.red)
                 }
@@ -386,7 +373,7 @@ struct PhoneDetectionSettingsView: View {
                 .clipShape(RoundedRectangle(cornerRadius: 4))
             }
             
-            Text("Uses camera to detect phone usage during focus sessions. Processing happens on-device.")
+            Text("Detects when you're looking down (phone usage posture). Triggers after 5 seconds.")
                 .font(.caption2)
                 .foregroundColor(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
