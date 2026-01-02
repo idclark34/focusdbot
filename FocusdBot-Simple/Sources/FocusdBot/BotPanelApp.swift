@@ -1,6 +1,7 @@
 import SwiftUI
 import AppKit
 import ApplicationServices
+import Combine
 
 // MARK: - Clock style options
 enum ClockStyle: String, CaseIterable, Identifiable, Codable {
@@ -122,6 +123,10 @@ class BotModel: ObservableObject {
         }
     }
 
+    // Phone detection via camera
+    @Published var phoneDetector: PhoneDetector = PhoneDetector()
+    private var phoneDetectionObserver: AnyCancellable?
+
     // Single high-accuracy timer source for all ticks/animations
     private var tickTimer: DispatchSourceTimer?
     private let timerQueue = DispatchQueue(label: "com.focusdbot.timer", qos: .userInitiated)
@@ -156,6 +161,22 @@ class BotModel: ObservableObject {
                 }
             }
         }
+        
+        // Phone detection observer - triggers distraction when phone detected during focus
+        phoneDetectionObserver = phoneDetector.$phoneDetected
+            .sink { [weak self] phoneDetected in
+                Task { @MainActor in
+                    guard let self = self else { return }
+                    guard self.pomodoroState == .running else { return }
+                    
+                    if phoneDetected {
+                        // Phone detected during focus session
+                        self.pomodoroState = .distracted
+                        NotificationCenter.default.post(name: .botShowPanel, object: nil)
+                        print("[PhoneDetector] Phone detected - marking as distracted")
+                    }
+                }
+            }
     }
 
     deinit {
@@ -221,6 +242,11 @@ class BotModel: ObservableObject {
             try s.insert(db)
             return db.lastInsertedRowID
         }
+        
+        // Start phone detection if enabled
+        if phoneDetector.isEnabled {
+            phoneDetector.startDetection()
+        }
     }
 
     func pauseSession() {
@@ -228,6 +254,9 @@ class BotModel: ObservableObject {
         pomodoroState = .idle
         currentSessionId = nil
         clearPersistedSession()
+        
+        // Stop phone detection when session paused
+        phoneDetector.stopDetection()
     }
 
     func finishSession() {
@@ -235,6 +264,9 @@ class BotModel: ObservableObject {
         pomodoroState = .idle
         currentSessionId = nil
         clearPersistedSession()
+        
+        // Stop phone detection when session finished
+        phoneDetector.stopDetection()
     }
 
     func setDuration(minutes: Int) {
@@ -445,6 +477,9 @@ class BotModel: ObservableObject {
                 completedToday += 1 // finished pomodoro
                 pomodoroState = .success
                 confettiBurst += 1
+                
+                // Stop phone detection when session completes
+                phoneDetector.stopDetection()
 
                 // Prompt user for reflection
                 promptForSessionName()
@@ -460,6 +495,8 @@ class BotModel: ObservableObject {
             // resume if back to allowed app
             if reallyAllowed {
                 pomodoroState = .running
+                // Reset phone detection state when resuming focus
+                phoneDetector.resetDetection()
                 if isMinimized {
                     NotificationCenter.default.post(name: .botHidePanel, object: nil)
                 }
@@ -473,6 +510,8 @@ class BotModel: ObservableObject {
             if remaining <= 0 {
                 pomodoroState = .idle
                 currentSessionId = nil
+                // Stop phone detection when break ends
+                phoneDetector.stopDetection()
             }
         default:
             break
@@ -911,6 +950,13 @@ struct BotMenuView: View {
                 .padding(.vertical, 4)
             }
             .padding(.vertical, 4)
+
+            Divider()
+
+            // Phone Detection
+            PhoneDetectionSettingsView(detector: model.phoneDetector)
+
+            Divider()
 
             // Minimize/Show toggle
             Button(model.isMinimized ? "Show Robot" : "Hide Robot") {
