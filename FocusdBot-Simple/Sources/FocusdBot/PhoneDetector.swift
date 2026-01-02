@@ -3,6 +3,7 @@
 import CoreML
 import AppKit
 import SwiftUI
+import UserNotifications
 
 // MARK: - Phone Detector
 /// Detects phone usage via camera using Vision framework
@@ -51,6 +52,7 @@ class PhoneDetector: NSObject, ObservableObject {
         super.init()
         checkCameraPermission()
         setupVisionDetection()
+        // Note: Notifications only work in proper .app bundles, not swift run
     }
     
     deinit {
@@ -192,6 +194,56 @@ class PhoneDetector: NSObject, ObservableObject {
             NSWorkspace.shared.open(url)
         }
     }
+    
+    // MARK: - Test Mode
+    func triggerTestDetection() {
+        Task { @MainActor in
+            self.phoneDetected = true
+            self.confidenceLevel = 0.90
+            self.lastDetectionTime = Date()
+            
+            // Play sound
+            NSSound.beep()
+            
+            // Show notification
+            sendNotification()
+            
+            print("[PhoneDetector] TEST: Manual detection triggered")
+            
+            // Auto-reset after cooldown
+            Task {
+                try? await Task.sleep(nanoseconds: UInt64(self.cooldownPeriod * 1_000_000_000))
+                await self.resetDetection()
+            }
+        }
+    }
+    
+    private func sendNotification() {
+        // Only works in proper .app bundles, not swift run
+        // Fail silently if not available
+        do {
+            let content = UNMutableNotificationContent()
+            content.title = "Phone Detected!"
+            content.body = "You're looking at your phone during focus time"
+            content.sound = .default
+            
+            let request = UNNotificationRequest(identifier: UUID().uuidString, content: content, trigger: nil)
+            
+            // Request permission first time
+            UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) { granted, _ in
+                if granted {
+                    UNUserNotificationCenter.current().add(request) { error in
+                        if let error = error {
+                            print("[PhoneDetector] Notification error: \(error)")
+                        }
+                    }
+                }
+            }
+        } catch {
+            // Silently fail - notifications not critical
+            print("[PhoneDetector] Notifications not available (needs .app bundle)")
+        }
+    }
 }
 
 // MARK: - AVCaptureVideoDataOutputSampleBufferDelegate
@@ -286,6 +338,12 @@ extension PhoneDetector: AVCaptureVideoDataOutputSampleBufferDelegate {
                         self.lastDetectionTime = Date()
                         print("[PhoneDetector] Phone usage detected! (head down for \(String(format: "%.1f", duration))s)")
                         
+                        // Play sound feedback
+                        NSSound.beep()
+                        
+                        // Show notification
+                        self.sendNotification()
+                        
                         // Reset timer to avoid continuous triggering
                         self.headDownStartTime = nil
                         
@@ -377,6 +435,16 @@ struct PhoneDetectionSettingsView: View {
                 .font(.caption2)
                 .foregroundColor(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
+            
+            // Test button
+            if detector.isEnabled && detector.cameraActive {
+                Button("Test Detection") {
+                    detector.triggerTestDetection()
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+                .help("Manually trigger detection to see/hear feedback")
+            }
         }
         .padding(.vertical, 4)
     }
