@@ -208,8 +208,8 @@ class PhoneDetector: NSObject, ObservableObject {
             self.confidenceLevel = 0.90
             self.lastDetectionTime = Date()
             
-            // Play sound
-            NSSound.beep()
+            // Play aggressive alarm
+            await self.playAggressiveAlarm()
             
             // Show notification
             sendNotification()
@@ -249,6 +249,34 @@ class PhoneDetector: NSObject, ObservableObject {
                 }
             }
         }
+    }
+    
+    @MainActor
+    private func playAggressiveAlarm() {
+        // Play multiple loud beeps in rapid succession
+        // This creates an aggressive, attention-grabbing alarm
+        
+        // Triple beep pattern with slight delays
+        NSSound.beep()
+        
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+            NSSound.beep()
+        }
+        
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+            NSSound.beep()
+        }
+        
+        // Second burst after a short pause
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.7) {
+            NSSound.beep()
+        }
+        
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.85) {
+            NSSound.beep()
+        }
+        
+        print("[PhoneDetector] 🚨🚨🚨 AGGRESSIVE ALARM TRIGGERED 🚨🚨🚨")
     }
 }
 
@@ -330,8 +358,8 @@ extension PhoneDetector: AVCaptureVideoDataOutputSampleBufferDelegate {
                         self.lastDetectionTime = Date()
                         print("[PhoneDetector] 🚨 Phone usage detected! (face gone for \(String(format: "%.1f", duration))s)")
                         
-                        // Play sound feedback
-                        NSSound.beep()
+                        // Play aggressive alarm
+                        self.playAggressiveAlarm()
                         
                         // Show notification
                         self.sendNotification()
