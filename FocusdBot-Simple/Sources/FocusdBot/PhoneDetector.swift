@@ -226,28 +226,28 @@ class PhoneDetector: NSObject, ObservableObject {
     
     private func sendNotification() {
         // Only works in proper .app bundles, not swift run
-        // Fail silently if not available
-        do {
-            let content = UNMutableNotificationContent()
-            content.title = "FocusdBot - Distraction Detected"
-            content.body = "You're looking away from your screen!"
-            content.sound = .default
-            
-            let request = UNNotificationRequest(identifier: UUID().uuidString, content: content, trigger: nil)
-            
-            // Request permission first time
-            UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) { granted, _ in
-                if granted {
-                    UNUserNotificationCenter.current().add(request) { error in
-                        if let error = error {
-                            print("[PhoneDetector] Notification error: \(error)")
-                        }
+        // Skip notifications when running via swift run to avoid crash
+        guard Bundle.main.bundleIdentifier != nil else {
+            print("[PhoneDetector] Skipping notification (not in .app bundle)")
+            return
+        }
+        
+        let content = UNMutableNotificationContent()
+        content.title = "FocusdBot - Distraction Detected"
+        content.body = "You're looking away from your screen!"
+        content.sound = .default
+        
+        let request = UNNotificationRequest(identifier: UUID().uuidString, content: content, trigger: nil)
+        
+        // Request permission first time
+        UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) { granted, _ in
+            if granted {
+                UNUserNotificationCenter.current().add(request) { error in
+                    if let error = error {
+                        print("[PhoneDetector] Notification error: \(error)")
                     }
                 }
             }
-        } catch {
-            // Silently fail - notifications not critical
-            print("[PhoneDetector] Notifications not available (needs .app bundle)")
         }
     }
 }
