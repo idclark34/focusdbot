@@ -27,6 +27,11 @@ class PhoneDetector: NSObject, ObservableObject {
     @Published var lastDetectionTime: Date?
     @Published var confidenceLevel: Float = 0.0
     
+    // Debug info
+    @Published var currentHeadPitch: Double? = nil
+    @Published var faceDetected: Bool = false
+    @Published var headDownDuration: TimeInterval = 0
+    
     // MARK: - Camera Properties
     private var captureSession: AVCaptureSession?
     private var videoOutput: AVCaptureVideoDataOutput?
@@ -295,11 +300,22 @@ extension PhoneDetector: AVCaptureVideoDataOutputSampleBufferDelegate {
         guard let results = request.results as? [VNFaceObservation] else {
             // No face detected - reset timer
             self.headDownStartTime = nil
+            Task { @MainActor in
+                self.currentHeadPitch = nil
+                self.faceDetected = false
+                self.headDownDuration = 0
+            }
             return
+        }
+        
+        // Update UI state
+        Task { @MainActor in
+            self.faceDetected = !results.isEmpty
         }
         
         // Check if any face is tilted down (phone usage posture)
         var headIsDown = false
+        var currentPitch: Double = 0
         
         for faceObservation in results {
             // Get face pitch (head tilt up/down)
@@ -308,6 +324,12 @@ extension PhoneDetector: AVCaptureVideoDataOutputSampleBufferDelegate {
             
             if let pitch = faceObservation.pitch?.doubleValue {
                 let pitchDegrees = pitch * 180.0 / .pi // Convert radians to degrees
+                currentPitch = pitchDegrees
+                
+                // Update UI with current pitch
+                Task { @MainActor in
+                    self.currentHeadPitch = pitchDegrees
+                }
                 
                 print("[PhoneDetector] Head pitch: \(String(format: "%.1f", pitchDegrees))°")
                 
@@ -329,6 +351,11 @@ extension PhoneDetector: AVCaptureVideoDataOutputSampleBufferDelegate {
                 print("[PhoneDetector] Started tracking head-down duration")
             } else if let startTime = headDownStartTime {
                 let duration = now.timeIntervalSince(startTime)
+                
+                // Update UI with duration
+                Task { @MainActor in
+                    self.headDownDuration = duration
+                }
                 
                 if duration >= headDownThreshold {
                     // Head has been down long enough - trigger detection
@@ -360,6 +387,10 @@ extension PhoneDetector: AVCaptureVideoDataOutputSampleBufferDelegate {
             if headDownStartTime != nil {
                 print("[PhoneDetector] Head back up - resetting timer")
                 headDownStartTime = nil
+            }
+            // Reset duration display
+            Task { @MainActor in
+                self.headDownDuration = 0
             }
         }
     }
@@ -407,13 +438,63 @@ struct PhoneDetectionSettingsView: View {
             }
             
             if detector.isEnabled && detector.cameraActive {
-                HStack {
-                    Circle()
-                        .fill(Color.red)
-                        .frame(width: 6, height: 6)
-                    Text("Camera active")
-                        .font(.caption2)
-                        .foregroundColor(.secondary)
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack {
+                        Circle()
+                            .fill(Color.red)
+                            .frame(width: 6, height: 6)
+                        Text("Camera active")
+                            .font(.caption2)
+                            .foregroundColor(.secondary)
+                    }
+                    
+                    // Debug info
+                    if detector.faceDetected {
+                        HStack {
+                            Text("✓ Face detected")
+                                .font(.caption2)
+                                .foregroundColor(.green)
+                            Spacer()
+                            if let pitch = detector.currentHeadPitch {
+                                Text("Head: \(String(format: "%.1f", pitch))°")
+                                    .font(.caption2)
+                                    .foregroundColor(pitch < -15 ? .orange : .secondary)
+                                    .monospacedDigit()
+                            }
+                        }
+                        
+                        if detector.headDownDuration > 0 {
+                            HStack {
+                                Text("Looking down for:")
+                                    .font(.caption2)
+                                    .foregroundColor(.orange)
+                                Spacer()
+                                Text("\(String(format: "%.1f", detector.headDownDuration))s / 5.0s")
+                                    .font(.caption2)
+                                    .foregroundColor(.orange)
+                                    .monospacedDigit()
+                            }
+                            
+                            // Progress bar
+                            GeometryReader { geometry in
+                                ZStack(alignment: .leading) {
+                                    Rectangle()
+                                        .fill(Color.gray.opacity(0.2))
+                                        .frame(height: 4)
+                                    
+                                    Rectangle()
+                                        .fill(Color.orange)
+                                        .frame(width: geometry.size.width * CGFloat(min(detector.headDownDuration / 5.0, 1.0)), height: 4)
+                                }
+                                .clipShape(RoundedRectangle(cornerRadius: 2))
+                            }
+                            .frame(height: 4)
+                        }
+                    } else {
+                        Text("❌ No face detected")
+                            .font(.caption2)
+                            .foregroundColor(.red)
+                    }
                 }
             }
             
