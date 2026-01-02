@@ -23,6 +23,9 @@ let package = Package(
                 "Safari.swift",
                 "PhoneDetector.swift"
             ],
+            resources: [
+                .copy("YOLOv3Tiny.mlmodelc")
+            ],
             linkerSettings: [
                 .linkedFramework("AppKit"),
                 .linkedFramework("ApplicationServices"),
