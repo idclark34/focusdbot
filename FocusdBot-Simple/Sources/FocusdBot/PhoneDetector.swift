@@ -48,10 +48,16 @@ class PhoneDetector: NSObject, ObservableObject {
     private let visionQueue = DispatchQueue(label: "com.focusdbot.vision", qos: .userInitiated)
     
     // MARK: - Face Disappearance Tracking
-    // New approach: Detect when face disappears (user looks away at phone)
+    // Dual approach: Detect when face disappears OR head tilts down (phone usage)
     nonisolated(unsafe) private var lastFaceSeenTime: Date?
     nonisolated(unsafe) private var faceDisappearStartTime: Date?
-    private let faceDisappearThreshold: TimeInterval = 8.0 // Detect after 8 seconds without face
+    private let faceDisappearThreshold: TimeInterval = 1.0 // Detect after 1 second without face
+    
+    // MARK: - Head Tilt Detection
+    // Detect when head is tilted down (looking at phone in lap/desk)
+    nonisolated(unsafe) private var headDownStartTime: Date?
+    private let headDownThreshold: TimeInterval = 1.0 // Detect after 1 second head down
+    private let headDownAngle: Double = 25.0 // Degrees - trigger when pitch goes ABOVE this (looking down = higher pitch)
     
     // MARK: - Initialization
     override init() {
@@ -69,17 +75,14 @@ class PhoneDetector: NSObject, ObservableObject {
     
     // MARK: - Vision Setup
     private func setupVisionDetection() {
-        // Use face detection with landmarks to detect head orientation
-        // This detects when user is looking down (phone usage posture)
-        let request = VNDetectFaceLandmarksRequest { [weak self] request, error in
+        // Use face capture quality request which provides pitch/yaw/roll data
+        // VNDetectFaceCaptureQualityRequest is designed to analyze face pose
+        let request = VNDetectFaceCaptureQualityRequest { [weak self] request, error in
             self?.handleFaceDetection(request: request, error: error)
         }
         
-        // Configure for better tracking
-        request.revision = VNDetectFaceLandmarksRequestRevision3
-        
         self.visionRequest = request
-        print("[PhoneDetector] Face orientation detection initialized")
+        print("[PhoneDetector] Face capture quality detection initialized")
         print("[PhoneDetector] Will detect head-down posture (looking at phone)")
     }
     
@@ -385,20 +388,83 @@ extension PhoneDetector: AVCaptureVideoDataOutputSampleBufferDelegate {
         
         // Reset disappearance tracking
         if faceDisappearStartTime != nil {
-            print("[PhoneDetector] ✅ Face back - resetting timer")
+            print("[PhoneDetector] ✅ Face back - resetting disappear timer")
             faceDisappearStartTime = nil
         }
         
-        // Reset duration display
-        Task { @MainActor in
-            self.headDownDuration = 0
-        }
-        
-        // Show pitch for debugging (optional)
-        if let face = results.first, let pitch = face.pitch?.doubleValue {
-            let pitchDegrees = pitch * 180.0 / .pi
+        // Check head tilt angle (pitch)
+        if let face = results.first {
+            // Log all available orientation data for debugging
+            let pitchValue = face.pitch?.doubleValue
+            let yawValue = face.yaw?.doubleValue
+            let rollValue = face.roll?.doubleValue
+            
+            print("[PhoneDetector] 🔍 Face orientation - Pitch: \(pitchValue.map { String(format: "%.3f rad", $0) } ?? "nil"), Yaw: \(yawValue.map { String(format: "%.3f rad", $0) } ?? "nil"), Roll: \(rollValue.map { String(format: "%.3f rad", $0) } ?? "nil")")
+            
+            if let pitch = pitchValue {
+                let pitchDegrees = pitch * 180.0 / .pi
+                Task { @MainActor in
+                    self.currentHeadPitch = pitchDegrees
+                }
+                
+                print("[PhoneDetector] 📐 Pitch angle: \(String(format: "%.1f", pitchDegrees))° (threshold: \(headDownAngle)°)")
+                
+                // Check if head is tilted down (looking at phone) - higher pitch = looking down
+                if pitchDegrees > headDownAngle {
+                    // Head is down - start/continue tracking
+                    if headDownStartTime == nil {
+                        headDownStartTime = now
+                        print("[PhoneDetector] ⚠️ Head tilted down at \(String(format: "%.1f", pitchDegrees))° (above \(headDownAngle)°) - starting timer")
+                    } else if let startTime = headDownStartTime {
+                        let duration = now.timeIntervalSince(startTime)
+                        
+                        // Update UI with duration
+                        Task { @MainActor in
+                            self.headDownDuration = duration
+                        }
+                        
+                        print("[PhoneDetector] Head down for \(String(format: "%.1f", duration))s (angle: \(String(format: "%.1f", pitchDegrees))°)")
+                        
+                        // Trigger detection if head has been down long enough
+                        if duration >= headDownThreshold && !phoneDetected {
+                            Task { @MainActor in
+                                self.phoneDetected = true
+                                self.confidenceLevel = 0.9
+                                self.lastDetectionTime = Date()
+                                print("[PhoneDetector] 🚨 Phone usage detected! (head down for \(String(format: "%.1f", duration))s at \(String(format: "%.1f", pitchDegrees))°)")
+                                
+                                // Play aggressive alarm
+                                self.playAggressiveAlarm()
+                                
+                                // Show notification
+                                self.sendNotification()
+                                
+                                // Auto-reset after cooldown
+                                Task {
+                                    try? await Task.sleep(nanoseconds: UInt64(self.cooldownPeriod * 1_000_000_000))
+                                    await self.resetDetection()
+                                }
+                            }
+                        }
+                    }
+                } else {
+                    // Head is up - reset tracking
+                    if headDownStartTime != nil {
+                        print("[PhoneDetector] ✅ Head up - resetting head-down timer")
+                        headDownStartTime = nil
+                    }
+                    
+                    // Reset duration display
+                    Task { @MainActor in
+                        self.headDownDuration = 0
+                    }
+                }
+            }
+        } else {
+            // Pitch data not available from Vision
+            print("[PhoneDetector] ⚠️ No pitch data available from face detection")
             Task { @MainActor in
-                self.currentHeadPitch = pitchDegrees
+                self.currentHeadPitch = nil
             }
         }
     }
@@ -464,17 +530,20 @@ struct PhoneDetectionSettingsView: View {
                                 .foregroundColor(.green)
                             Spacer()
                             if let pitch = detector.currentHeadPitch {
+                                let isLookingDown = pitch < -15
                                 Text("Head: \(String(format: "%.1f", pitch))°")
                                     .font(.caption2)
-                                    .foregroundColor(pitch < -15 ? .orange : .secondary)
+                                    .foregroundColor(isLookingDown ? .orange : .green)
                                     .monospacedDigit()
+                                Text(isLookingDown ? "👀📱" : "👀💻")
+                                    .font(.caption2)
                             }
                         }
                         
                         if detector.headDownDuration > 0 {
-                            // Face is gone - tracking duration
+                            // Head is down - tracking duration
                             HStack {
-                                Text("⚠️ Face gone for:")
+                                Text(detector.faceDetected ? "⚠️ Head down for:" : "⚠️ Face gone for:")
                                     .font(.caption2)
                                     .foregroundColor(.orange)
                                 Spacer()
@@ -521,7 +590,7 @@ struct PhoneDetectionSettingsView: View {
                 .clipShape(RoundedRectangle(cornerRadius: 4))
             }
             
-            Text("Detects when you look away from screen (e.g., at phone). Triggers after 8 seconds.")
+            Text("Detects phone usage by tracking head tilt (<-15°) or face leaving view. Triggers after 8 seconds.")
                 .font(.caption2)
                 .foregroundColor(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
