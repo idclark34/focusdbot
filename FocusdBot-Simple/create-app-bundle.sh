@@ -1,0 +1,96 @@
+#!/bin/bash
+
+# Build the app first
+echo "Building FocusdBot Simple..."
+swift build -c release
+
+# Create app bundle structure
+APP_NAME="FocusdBot-Simple"
+# Bump VERSION to force icon cache refresh when distributing
+VERSION=${VERSION:-"1.0.1"}
+BUNDLE_DIR="dist/${APP_NAME}.app"
+CONTENTS_DIR="${BUNDLE_DIR}/Contents"
+MACOS_DIR="${CONTENTS_DIR}/MacOS"
+RESOURCES_DIR="${CONTENTS_DIR}/Resources"
+
+echo "Creating app bundle structure..."
+rm -rf "${BUNDLE_DIR}"
+mkdir -p "${MACOS_DIR}"
+mkdir -p "${RESOURCES_DIR}"
+
+# Optionally include an app icon if provided
+# Drop either AppIcon.icns or AppIcon.png in the FocusdBot-Simple/ folder.
+# If a PNG is provided, this will generate an .icns for you.
+ICON_NAME="AppIcon"
+ICON_PNG="AppIcon.png"
+ICON_ICNS="AppIcon.icns"
+
+if [ -f "${ICON_ICNS}" ]; then
+  echo "Including existing ${ICON_ICNS}..."
+  cp "${ICON_ICNS}" "${RESOURCES_DIR}/${ICON_NAME}.icns"
+elif [ -f "${ICON_PNG}" ]; then
+  echo "Generating ${ICON_NAME}.icns from ${ICON_PNG}..."
+  TMP_ICONSET="$(mktemp -d)/Icon.iconset"
+  mkdir -p "${TMP_ICONSET}"
+  for SZ in 16 32 128 256 512; do
+    sips -z ${SZ} ${SZ} "${ICON_PNG}" --out "${TMP_ICONSET}/icon_${SZ}x${SZ}.png" >/dev/null
+    sips -z $((SZ*2)) $((SZ*2)) "${ICON_PNG}" --out "${TMP_ICONSET}/icon_${SZ}x${SZ}@2x.png" >/dev/null
+  done
+  iconutil -c icns "${TMP_ICONSET}" -o "${RESOURCES_DIR}/${ICON_NAME}.icns"
+  rm -rf "${TMP_ICONSET%/Icon.iconset}"
+fi
+
+# Copy the executable
+echo "Copying executable..."
+cp ".build/release/FocusdBot" "${MACOS_DIR}/${APP_NAME}"
+
+# Create Info.plist
+echo "Creating Info.plist..."
+cat > "${CONTENTS_DIR}/Info.plist" << EOF
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>CFBundleExecutable</key>
+    <string>${APP_NAME}</string>
+    <key>CFBundleIdentifier</key>
+    <string>com.focusdbot.simple</string>
+    <key>CFBundleName</key>
+    <string>FocusdBot Simple</string>
+    <key>CFBundleDisplayName</key>
+    <string>FocusdBot Simple</string>
+$( if [ -f "${RESOURCES_DIR}/${ICON_NAME}.icns" ]; then printf "    <key>CFBundleIconFile</key>\n    <string>%s</string>\n" "${ICON_NAME}"; fi )
+    <key>CFBundleVersion</key>
+    <string>${VERSION}</string>
+    <key>CFBundleShortVersionString</key>
+    <string>${VERSION}</string>
+    <key>CFBundlePackageType</key>
+    <string>APPL</string>
+    <key>CFBundleSignature</key>
+    <string>????</string>
+    <key>LSMinimumSystemVersion</key>
+    <string>13.0</string>
+    <key>LSUIElement</key>
+    <true/>
+    <key>NSHighResolutionCapable</key>
+    <true/>
+    <key>NSSupportsAutomaticGraphicsSwitching</key>
+    <true/>
+</dict>
+</plist>
+EOF
+
+# Make executable
+chmod +x "${MACOS_DIR}/${APP_NAME}"
+
+echo "✅ App bundle created at: ${BUNDLE_DIR}"
+echo "📦 Size: $(du -sh "${BUNDLE_DIR}" | cut -f1)"
+
+# Create ZIP for distribution
+echo "Creating ZIP for distribution..."
+cd dist
+zip -r "${APP_NAME}-${VERSION}.zip" "${APP_NAME}.app"
+cd ..
+
+echo "✅ Distribution ZIP created: dist/${APP_NAME}-${VERSION}.zip"
+echo "📦 ZIP Size: $(du -sh "dist/${APP_NAME}-${VERSION}.zip" | cut -f1)"

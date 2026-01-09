@@ -6,3 +6,12 @@
 dist/
 dmg-temp/
 
+
+# Node
+server/node_modules/
+server/.env
+
+# Local signing
+FocusedBot/entitlements.plist
+FocusedBot/entitlements 2.plist
+

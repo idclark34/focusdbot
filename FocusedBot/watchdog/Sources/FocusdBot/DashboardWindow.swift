@@ -96,36 +96,9 @@ struct StatsView: View {
                     modernStat(icon: "exclamationmark.triangle", label: "Distracted", value: "\(model.distractedSecondsToday/60)m", tint: .orange, bgColor: Color.orange.opacity(0.1), fullWidth: true)
                 }
 
-                // Recent Reflections
-                if !model.sessionSummaries.isEmpty {
-                    VStack(alignment: .leading, spacing: 12) {
-                        HStack {
-                            Image(systemName: "lightbulb.fill")
-                                .foregroundColor(.yellow)
-                            Text("Recent Reflections")
-                                .font(.headline)
-                        }
-                        
-                        VStack(alignment: .leading, spacing: 8) {
-                            ForEach(model.sessionSummaries.prefix(3), id: \.self) { txt in
-                                HStack(alignment: .top, spacing: 8) {
-                                    Circle()
-                                        .fill(Color.blue)
-                                        .frame(width: 4, height: 4)
-                                        .padding(.top, 6)
-                                    Text(txt)
-                                        .font(.callout)
-                                        .lineLimit(2)
-                                }
-                            }
-                        }
-                        .padding(12)
-                        .background(
-                            RoundedRectangle(cornerRadius: 8, style: .continuous)
-                                .fill(Color.blue.opacity(0.05))
-                        )
-                    }
-                }
+                // Recent Reflections (manual + AI summaries)
+                RecentReflectionsView()
+                    .environmentObject(model)
 
                 Button(action: { model.showDashboard() }) {
                     HStack {
@@ -419,5 +392,135 @@ struct HistoryTab: View {
     private func bundleName(_ id: String) -> String {
         if id == Bundle.main.bundleIdentifier { return "FocusdBot" }
         return NSWorkspace.shared.runningApplications.first(where: { $0.bundleIdentifier == id })?.localizedName ?? id
+    }
+}
+
+// MARK: - Recent Reflections View
+struct RecentReflectionsView: View {
+    @EnvironmentObject var model: BotModel
+    @State private var recentSessions: [SessionSummary] = []
+    
+    struct SessionSummary: Identifiable {
+        let id: Int64
+        let summary: String
+        let isAI: Bool
+        let date: Date
+    }
+    
+    var body: some View {
+        if !recentSessions.isEmpty {
+            VStack(alignment: .leading, spacing: 12) {
+                HStack {
+                    Image(systemName: "lightbulb.fill")
+                        .foregroundColor(.yellow)
+                    Text("Recent Reflections")
+                        .font(.headline)
+                }
+                
+                VStack(alignment: .leading, spacing: 8) {
+                    ForEach(recentSessions.prefix(3)) { session in
+                        HStack(alignment: .top, spacing: 8) {
+                            Circle()
+                                .fill(session.isAI ? Color.blue : Color.green)
+                                .frame(width: 4, height: 4)
+                                .padding(.top, 6)
+                            VStack(alignment: .leading, spacing: 2) {
+                                HStack {
+                                    Text(session.summary)
+                                        .font(.callout)
+                                        .lineLimit(2)
+                                    Spacer()
+                                    if session.isAI {
+                                        Image(systemName: "sparkles")
+                                            .font(.caption2)
+                                            .foregroundColor(.blue)
+                                    }
+                                }
+                                Text(session.date, style: .time)
+                                    .font(.caption2)
+                                    .foregroundColor(.secondary)
+                            }
+                        }
+                    }
+                }
+                .padding(12)
+                .background(
+                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                        .fill(Color.blue.opacity(0.05))
+                )
+            }
+            .onAppear {
+                loadRecentSessions()
+            }
+        }
+    }
+    
+    private func loadRecentSessions() {
+        Task {
+            do {
+                let sessions = try await fetchRecentSessions()
+                await MainActor.run {
+                    self.recentSessions = sessions
+                }
+            } catch {
+                print("[RecentReflectionsView] Error loading sessions: \(error)")
+            }
+        }
+    }
+    
+    private func fetchRecentSessions() async throws -> [SessionSummary] {
+        return try await withCheckedThrowingContinuation { continuation in
+            do {
+                try DB.shared.read { db in
+                    var summaries: [SessionSummary] = []
+                    
+                    // First add manual summaries (from sessionSummaries array)
+                    for (index, summary) in model.sessionSummaries.enumerated() {
+                        summaries.append(SessionSummary(
+                            id: Int64(-index - 1), // Negative IDs for manual summaries
+                            summary: summary,
+                            isAI: false,
+                            date: Date() // We don't track dates for manual summaries
+                        ))
+                    }
+                    
+                    // Then add AI summaries from database where no manual summary exists
+                    let aiSessions = try db.execute(sql: """
+                        SELECT id, aiSummary, start 
+                        FROM session 
+                        WHERE completed = 1 
+                          AND aiSummary IS NOT NULL 
+                          AND aiSummary != ''
+                        ORDER BY start DESC 
+                        LIMIT 5
+                    """) { statement in
+                        var results: [SessionSummary] = []
+                        while try statement.next() {
+                            let id = statement.columnValue(at: 0).int64Value
+                            let aiSummary = statement.columnValue(at: 1).stringValue
+                            let start = statement.columnValue(at: 2).dateValue
+                            
+                            results.append(SessionSummary(
+                                id: id,
+                                summary: aiSummary,
+                                isAI: true,
+                                date: start
+                            ))
+                        }
+                        return results
+                    }
+                    
+                    // Add AI summaries that don't duplicate manual ones
+                    summaries.append(contentsOf: aiSessions)
+                    
+                    // Sort by date (newer first) and limit to 5
+                    summaries.sort { $0.date > $1.date }
+                    
+                    continuation.resume(returning: Array(summaries.prefix(5)))
+                }
+            } catch {
+                continuation.resume(throwing: error)
+            }
+        }
     }
 } 
