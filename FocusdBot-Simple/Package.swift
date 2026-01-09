@@ -16,12 +16,23 @@ let package = Package(
             dependencies: [
                 .product(name: "GRDB", package: "GRDB.swift")
             ],
-            sources: ["BotPanelApp.swift", "Database.swift", "ReflectionWindow.swift", "Safari.swift", "Chrome.swift"],
+            sources: [
+                "BotPanelApp.swift",
+                "Database.swift",
+                "ReflectionWindow.swift",
+                "Safari.swift",
+                "PhoneDetector.swift"
+            ],
+            resources: [
+                .copy("YOLOv3Tiny.mlmodelc")
+            ],
             linkerSettings: [
                 .linkedFramework("AppKit"),
                 .linkedFramework("ApplicationServices"),
-                .linkedFramework("SwiftUI")
+                .linkedFramework("SwiftUI"),
+                .linkedFramework("AVFoundation")
             ]
         )
     ]
 )
+

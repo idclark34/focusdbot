@@ -1,6 +1,7 @@
 import SwiftUI
 import AppKit
 import ApplicationServices
+import Combine
 
 // MARK: - Clock style options
 enum ClockStyle: String, CaseIterable, Identifiable, Codable {
@@ -122,6 +123,10 @@ class BotModel: ObservableObject {
         }
     }
 
+    // Phone detection via camera
+    @Published var phoneDetector: PhoneDetector = PhoneDetector()
+    private var phoneDetectionObserver: AnyCancellable?
+
     // Single high-accuracy timer source for all ticks/animations
     private var tickTimer: DispatchSourceTimer?
     private let timerQueue = DispatchQueue(label: "com.focusdbot.timer", qos: .userInitiated)
@@ -156,6 +161,22 @@ class BotModel: ObservableObject {
                 }
             }
         }
+        
+        // Phone detection observer - triggers distraction when phone detected during focus
+        phoneDetectionObserver = phoneDetector.$phoneDetected
+            .sink { [weak self] phoneDetected in
+                Task { @MainActor in
+                    guard let self = self else { return }
+                    guard self.pomodoroState == .running else { return }
+                    
+                    if phoneDetected {
+                        // Phone detected during focus session
+                        self.pomodoroState = .distracted
+                        NotificationCenter.default.post(name: .botShowPanel, object: nil)
+                        print("[PhoneDetector] Phone detected - marking as distracted")
+                    }
+                }
+            }
     }
 
     deinit {
@@ -217,9 +238,14 @@ class BotModel: ObservableObject {
 
         // insert session row
         currentSessionId = try? DB.shared.write { db in
-            var s = Session(id: nil, start: Date(), end: nil, type: "work", plannedMinutes: durationMinutes, completed: false)
+            let s = Session(id: nil, start: Date(), end: nil, type: "work", plannedMinutes: durationMinutes, completed: false)
             try s.insert(db)
             return db.lastInsertedRowID
+        }
+        
+        // Start phone detection if enabled
+        if phoneDetector.isEnabled {
+            phoneDetector.startDetection()
         }
     }
 
@@ -228,6 +254,9 @@ class BotModel: ObservableObject {
         pomodoroState = .idle
         currentSessionId = nil
         clearPersistedSession()
+        
+        // Stop phone detection when session paused
+        phoneDetector.stopDetection()
     }
 
     func finishSession() {
@@ -235,6 +264,9 @@ class BotModel: ObservableObject {
         pomodoroState = .idle
         currentSessionId = nil
         clearPersistedSession()
+        
+        // Stop phone detection when session finished
+        phoneDetector.stopDetection()
     }
 
     func setDuration(minutes: Int) {
@@ -287,8 +319,30 @@ class BotModel: ObservableObject {
     // Cache last known Safari host allow result to avoid transient AppleScript failures
     private var lastSafariHost: String? = nil
     private var lastSafariAllowed: Bool = false
-    private var lastChromeHost: String? = nil
-    private var lastChromeAllowed: Bool = false
+    
+    // Helper functions for domain sanitization
+    private func sanitizeDomainInput(_ input: String) -> String? {
+        let trimmed = input.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.isEmpty { return nil }
+        // Try URL parsing first
+        if let url = URL(string: trimmed), let host = url.host {
+            return normalizeHost(host)
+        }
+        // If it doesn't parse as URL, try adding a scheme and reparse
+        if let url = URL(string: "https://" + trimmed), let host = url.host {
+            return normalizeHost(host)
+        }
+        // Fallback: strip any path and www.
+        let lower = trimmed.lowercased()
+        let base = lower.split(separator: "/", maxSplits: 1).first.map(String.init) ?? lower
+        return normalizeHost(base)
+    }
+    
+    private func normalizeHost(_ host: String) -> String {
+        let lower = host.lowercased()
+        if lower.hasPrefix("www.") { return String(lower.dropFirst(4)) }
+        return lower
+    }
 
     private func loadWebRules() {
         if let data = UserDefaults.standard.data(forKey: webRuleKey),
@@ -405,49 +459,6 @@ class BotModel: ObservableObject {
             }
         }
 
-        // Check website rules for Chrome if Chrome is not already allowed as an app.
-        let isChrome = (currentBundle == "com.google.Chrome" || currentBundle == "Google Chrome")
-        if isChrome && !allowed {
-            if let url = Chrome.activeTabURL(), let h = url.host?.lowercased() {
-                let host = h.hasPrefix("www.") ? String(h.dropFirst(4)) : h
-                let isWebsiteAllowed = webRules.contains { rule in
-                    guard rule.enabled else { return false }
-                    let d = rule.domain
-                    return host == d || host.hasSuffix("." + d)
-                }
-                lastChromeHost = host
-                lastChromeAllowed = isWebsiteAllowed
-                reallyAllowed = isWebsiteAllowed
-            } else {
-                // If Chrome URL unavailable this tick, fall back to last known result
-                reallyAllowed = lastChromeAllowed
-            }
-        }
-
-    // Sanitize input like "https://www.youtube.com/watch?v=.." to "youtube.com"
-    private func sanitizeDomainInput(_ input: String) -> String? {
-        let trimmed = input.trimmingCharacters(in: .whitespacesAndNewlines)
-        if trimmed.isEmpty { return nil }
-        // Try URL parsing first
-        if let url = URL(string: trimmed), let host = url.host {
-            return normalizeHost(host)
-        }
-        // If it doesn't parse as URL, try adding a scheme and reparse
-        if let url = URL(string: "https://" + trimmed), let host = url.host {
-            return normalizeHost(host)
-        }
-        // Fallback: strip any path and www.
-        let lower = trimmed.lowercased()
-        let base = lower.split(separator: "/", maxSplits: 1).first.map(String.init) ?? lower
-        return normalizeHost(base)
-    }
-
-    private func normalizeHost(_ host: String) -> String {
-        let lower = host.lowercased()
-        if lower.hasPrefix("www.") { return String(lower.dropFirst(4)) }
-        return lower
-        }
-
         switch pomodoroState {
         case .running:
             if !reallyAllowed {
@@ -466,6 +477,9 @@ class BotModel: ObservableObject {
                 completedToday += 1 // finished pomodoro
                 pomodoroState = .success
                 confettiBurst += 1
+                
+                // Stop phone detection when session completes
+                phoneDetector.stopDetection()
 
                 // Prompt user for reflection
                 promptForSessionName()
@@ -481,6 +495,8 @@ class BotModel: ObservableObject {
             // resume if back to allowed app
             if reallyAllowed {
                 pomodoroState = .running
+                // Reset phone detection state when resuming focus
+                phoneDetector.resetDetection()
                 if isMinimized {
                     NotificationCenter.default.post(name: .botHidePanel, object: nil)
                 }
@@ -494,6 +510,8 @@ class BotModel: ObservableObject {
             if remaining <= 0 {
                 pomodoroState = .idle
                 currentSessionId = nil
+                // Stop phone detection when break ends
+                phoneDetector.stopDetection()
             }
         default:
             break
@@ -571,7 +589,7 @@ class BotModel: ObservableObject {
 
             // Insert app usage records
             for (bundle, seconds) in sessionAppSeconds {
-                var appRecord = SessionApp(id: nil, sessionId: sessionId, bundleId: bundle, seconds: seconds)
+                let appRecord = SessionApp(id: nil, sessionId: sessionId, bundleId: bundle, seconds: seconds)
                 try appRecord.insert(db)
             }
         }
@@ -932,6 +950,13 @@ struct BotMenuView: View {
                 .padding(.vertical, 4)
             }
             .padding(.vertical, 4)
+
+            Divider()
+
+            // Phone Detection
+            PhoneDetectionSettingsView(detector: model.phoneDetector)
+
+            Divider()
 
             // Minimize/Show toggle
             Button(model.isMinimized ? "Show Robot" : "Hide Robot") {
@@ -1482,4 +1507,5 @@ extension Notification.Name {
     static let botMinimizeToggled = Notification.Name("botMinimizeToggled")
     static let botShowPanel = Notification.Name("botShowPanel")
     static let botHidePanel = Notification.Name("botHidePanel")
+    static let focusdAISummaryReady = Notification.Name("focusdAISummaryReady")
 }
